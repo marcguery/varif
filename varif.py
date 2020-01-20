@@ -1,26 +1,35 @@
-#!/usr/bin/env python3
 import math
-import vcfpy
+from variants import Variants
 
 class Varif(object):
 
-    def frac_AD(recordSample):
-        """
-        Gets the ratios of each allele with ref allele.
-        Note that 0/0 is 'considered' equal to 1.
+    def __init__(self, vcf):
+        self.variants=Variants()
+        self.variants.load_variants_from_VCF(vcf)
+        self.annotations={}
 
-        recordSample (list) : The ref allele followed by the alternate allele(s)
+    def get_scores(self, csv="Variants.csv", show=False):
+        sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
+        printedLine="Chromsome, Position, Type, Ref, Alt,"
+        printedLine+=",".join(self.variants.samples)+","
+        printedLine+="Score\n"
+        for key in sortedKeys:
+            if not any(score==0 for score in self.variants.variants[key]["scores"]):
+                continue
+            printedLine+=key.split(":")[0]+","
+            printedLine+=key.split(":")[1]+","
+            printedLine+=self.variants.variants[key]["category"]+","
+            printedLine+=self.variants.variants[key]["ref"]+","
+            printedLine+=";".join(self.variants.variants[key]["alts"])+","
+            for sample in self.variants.variants[key]["ratios"]:
+                printedLine+=";".join([str(self.variants.variants[key]["ratios"][sample][rank]) for rank in range(1,len(self.variants.variants[key]["ratios"][sample]))])
+                printedLine+=","
+            printedLine+=";".join([str(score) for score in self.variants.variants[key]["scores"]])+"\n"
+        with open(csv, 'w') as f:
+            f.write(printedLine)
 
-        return (list) : the ratios
-        """
-        #Handling division by zero, when there is no ref
-        if sum(recordSample)==0:
-            recordSample=[math.nan]*len(recordSample)
-        else:
-            recordSample=list(map(lambda x : x/sum(recordSample), recordSample))
-        return recordSample
 
-    def read_gff(gff, annotation):
+    def read_gff(self, gff, annotation):
         """
         Reads a GFF file
 
@@ -55,7 +64,7 @@ class Varif(object):
             gffInfo[chromosome]['positions']=sorted(gffInfo[chromosome]['positions'], key=lambda x : x[1][0])
         return gffInfo
 
-    def get_id_from_position(position, gffreader, chromosome):
+    def get_id_from_position(self, position, gffreader, chromosome):
         """
         Retrieve information about an annotation level in which there is a variant
 
@@ -90,68 +99,5 @@ class Varif(object):
                 finished=True
 
         return ["No ID", "No function", "No Positions"]
-
-    def read_vcf(vcf):
-        """Reads a VCF file with vcfpy library"""
-        return vcfpy.Reader.from_path(vcf)
-
-    def get_ratios_from_vcf(vcfreader, samples, mindepth=5):
-        """
-        Retrieve the allele ratios of variants in a vcf reader object
-
-        vcfreader (VCF reader) : The VCF reader object
-        mindepth : The minimal total depth to consider a variant
-        """
-        ratios={}
-        for record in vcfreader:
-            recordname=record.CHROM+":"+str(record.POS)
-            ref=record.REF
-            alt=record.ALT
-            id=1
-            while recordname in ratios:
-                recordname+="."+str(id)
-                id+=1
-            ratios[recordname]={}
-            recordsAD={call.sample:call.data.get('AD') for call in record.calls}
-            for key in samples:
-                ad=recordsAD[samples[key]] if sum(recordsAD[samples[key]])>mindepth else [0]*len(recordsAD[samples[key]])
-                ratio=Varif.frac_AD(ad)
-                ratios[recordname][key]=ratio
-        return ratios
-
-    def get_score_from_ratios(ratios, maxprop=0.1, minprop=None):
-        minprop=1-maxprop if minprop is None else minprop
-        assert 0 < maxprop < 0.5 and 0.5 < minprop < 1
-        varState={sample:ratios[sample] > minprop for sample in ratios}
-        minratio=min(ratios.values())
-        maxratio=max(ratios.values())
-        if math.isnan(minratio) or math.isnan(maxratio):
-            score=math.nan
-        #fixedVariants
-        elif minratio > minprop:
-            score = 0
-        #Ambiguous variants
-        elif minratio >= maxprop or maxratio <= minprop:
-            score = -maxratio/minratio if minratio != 0 else -math.inf
-        #True Variants
-        elif minratio < maxprop and maxratio > minprop:
-            score = maxratio/minratio if minratio != 0 else math.inf
-        return [score, varState]
-
-
-    def write_scores(scores, variants, gff, annotation, csv="Variants.csv", show=False, fixedvariants=True, allregions=False, allvariants=False):
-        cutoff=1 if allvariants is False else -math.inf
-        sortedKeys=sorted(scores, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
-        sortedvariantsKeys=sorted(variants[next(iter(variants))])
-        with open(csv, 'w') as variantFile:
-            variantFile.write(",".join(["Location", annotation, "Function", "Score"]+sortedvariantsKeys)+"\n")
-            for key in sortedKeys:
-                if any(score == 0 and fixedvariants is True or score >= cutoff for score in scores[key]):
-                    identifier=Varif.get_id_from_position(int(key.split(":")[1].split(".")[0]), gff, key.split(":")[0])
-                    if identifier[0] != "No ID" or allregions is True:
-                        line=key+","+str(identifier[0])+","+str(identifier[1])+","+":".join([str(score) for score in scores[key]])+","+",".join([":".join(map(str, variants[key][sample])) for sample in sortedvariantsKeys])
-                        if show is True:
-                            print(line)
-                        variantFile.write(line+"\n")
 
     
