@@ -58,7 +58,7 @@ class Variants(object):
             num=0
             while identifier in self.variants:
                 num+=1
-                identifier+="."+str(num)
+                identifier=identifier.split(".")[0]+"."+str(num)
             self.variants[identifier]={
                 "scores":variant.scores, "category":variant.category,
                 "ref":variant.ref, "alts":variant.alts, 

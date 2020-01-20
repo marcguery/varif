@@ -26,7 +26,7 @@ class Variant(object):
         else:
             return "INDEL"
     
-    def calculate_ratios(self, mindepth=5):
+    def calculate_ratios(self, mindepth=6):
         #Handling division by zero, when there is no ref
         for sample in self.counts:
             if sum(self.counts[sample]) < mindepth:
@@ -43,7 +43,7 @@ class Variant(object):
         for rank in range(1,len(self.alts)+1):
             ratioRank=[self.ratios[sample][rank] for sample in self.ratios]
             #No sample is above depth
-            if math.isnan(sum(ratioRank)):
+            if all(np.isnan(ratio) for ratio in ratioRank):
                 self.scores.append(math.nan)
                 continue
             minratio=np.nanmin(ratioRank)

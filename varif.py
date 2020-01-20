@@ -8,13 +8,15 @@ class Varif(object):
         self.variants.load_variants_from_VCF(vcf)
         self.annotations={}
 
-    def get_scores(self, csv="Variants.csv", show=False):
+    def get_scores(self, csv="Variants.csv", fixed=True, allVariants=False, show=False):
+        code=-1 if fixed is True else 1
+        code=-math.inf if allVariants is True else code
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         printedLine="Chromsome, Position, Type, Ref, Alt,"
         printedLine+=",".join(self.variants.samples)+","
         printedLine+="Score\n"
         for key in sortedKeys:
-            if not any(score==0 for score in self.variants.variants[key]["scores"]):
+            if not any(score>code for score in self.variants.variants[key]["scores"]):
                 continue
             printedLine+=key.split(":")[0]+","
             printedLine+=key.split(":")[1]+","
@@ -25,6 +27,8 @@ class Varif(object):
                 printedLine+=";".join([str(self.variants.variants[key]["ratios"][sample][rank]) for rank in range(1,len(self.variants.variants[key]["ratios"][sample]))])
                 printedLine+=","
             printedLine+=";".join([str(score) for score in self.variants.variants[key]["scores"]])+"\n"
+        if show is True:
+            print(printedLine)
         with open(csv, 'w') as f:
             f.write(printedLine)
 
