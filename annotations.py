@@ -7,7 +7,7 @@ class Annotations(object):
         self.ranks=range(0,9)
 
     def load_annotations_from_GFF(self, gff):
-        gfffile=open(gff).readlines()
+        gfffile=open(gff, 'r').readlines()
         n=0
         line=gfffile[n]
         while line.startswith('##') and n < len(gfffile):
@@ -34,6 +34,7 @@ class Annotations(object):
                 'chromosome':annotation.chromosome,
                 'start':annotation.start,
                 'end':annotation.end,
+                'strand':annotation.strand,
                 'annotation':annotation.annotation,
                 'parents':annotation.parents,
                 'description':annotation.description

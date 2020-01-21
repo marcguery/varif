@@ -38,7 +38,7 @@ class Variants(object):
             print("Bad VCF header")
 
     def load_variants_from_VCF(self, vcf):
-        vcffile=open(vcf).readlines()
+        vcffile=open(vcf, 'r').readlines()
         n=0
         line=vcffile[n]
         while line.startswith('##') and n < len(vcffile):

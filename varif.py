@@ -1,29 +1,46 @@
 import math
 from variants import Variants
 from annotations import Annotations
+from fasta import Fasta
 
 
 class Varif(object):
 
-    def __init__(self, vcf, gff):
+    def __init__(self, vcf, gff, fasta):
         self.variants=Variants()
         self.variants.load_variants_from_VCF(vcf)
         self.annotations=Annotations()
         self.annotations.load_annotations_from_GFF(gff)
+        self.fasta=Fasta()
+        self.fasta.load_data_from_FASTA(fasta)
     
     def map_GFFid_VCFpos(self, chromosome, position):
         finished=False
         maxValue=len(self.annotations.positions[chromosome])-1
         minValue=0
         index=math.floor(maxValue-minValue/2)
+        identifiers=[]
         while not finished:
             mini=self.annotations.positions[chromosome][index][0]
             maxi=self.annotations.positions[chromosome][index][1]
             if position >= mini and position <= maxi:
+                n=0
+                while position >= mini and position <= maxi:
+                    identifiers.append(self.annotations.positions[chromosome][index][2])
+                    index+=1
+                    n+=1
+                    mini=self.annotations.positions[chromosome][index][0]
+                    maxi=self.annotations.positions[chromosome][index][1]
+                index=index-n-1
+                mini=self.annotations.positions[chromosome][index][0]
+                maxi=self.annotations.positions[chromosome][index][1]
+                while position >= mini and position <= maxi:
+                    identifiers.append(self.annotations.positions[chromosome][index][2])
+                    index-=1
+                    mini=self.annotations.positions[chromosome][index][0]
+                    maxi=self.annotations.positions[chromosome][index][1]
                 finished=True
-                identifier=self.annotations.positions[chromosome][index][2]
-                return identifier
-            elif position > maxi and index < maxValue:
+            if position > maxi and index < maxValue:
                 minValue=index+1
                 index=math.ceil((maxValue+index)/2)
             elif position < mini and index > minValue:
@@ -31,7 +48,20 @@ class Varif(object):
                 index=math.floor((index+minValue)/2)
             else:
                 finished=True
-        return
+        return identifiers
+    
+    def get_codon_from_mutation(self, chromosome, position, mutation, gffIds):
+        startMutation=position
+        codons=[]
+        for gffId in gffIds:
+            if self.annotations.annotations[gffId]['annotation']!='exon':
+                continue
+            startExon=self.annotations.annotations[gffId]['start']
+            endExon=self.annotations.annotations[gffId]['end']
+            oldExon=self.fasta.data[chromosome][startExon-1:endExon]
+            newExon=self.fasta.data[chromosome][startExon-1:endExon]
+            newExon=newExon[0:startMutation-startExon]+'re'+mutation+'re'+newExon[startMutation-startExon+len(mutation):]
+        return codons
 
     def get_scores(self, fixed=False, allVariants=False, allRegions=False, show=False, csv="Variants.csv"):
         code=0 if fixed is True else 1
@@ -42,17 +72,20 @@ class Varif(object):
         for key in sortedKeys:
             if not any(score>=code for score in self.variants.variants[key]["scores"]):
                 continue
-            gffId=self.map_GFFid_VCFpos(key.split(":")[0], int(key.split(":")[1].split(".")[0]))
-            if gffId is None and allRegions is False:
+            chrom=key.split(":")[0]
+            pos=int(key.split(":")[1].split(".")[0])
+            gffIds=self.map_GFFid_VCFpos(chrom, pos)
+            if len(gffIds)==0 and allRegions is False:
                 continue
+            codons=[self.get_codon_from_mutation(chrom, pos, alt, gffIds) for alt in self.variants.variants[key]["alts"]]
             printedLine+=key.split(":")[0]+","
             printedLine+=key.split(":")[1]+","
             printedLine+=self.variants.variants[key]["category"]+","
             printedLine+=self.variants.variants[key]["ref"]+","
             printedLine+=";".join(self.variants.variants[key]["alts"])+","
             printedLine+=";".join([str(score) for score in self.variants.variants[key]["scores"]])+","
-            if gffId is not None:
-                printedLine+=self.annotations.annotations[gffId]['description']+" ("+gffId+"),"
+            if len(gffIds)>0:
+                printedLine+=":".join([self.annotations.annotations[gffId]['description']+" ("+gffId+")" for gffId in gffIds])
             else:
                 printedLine+="NA,"
             for index,sample in enumerate(self.variants.variants[key]["ratios"]):
