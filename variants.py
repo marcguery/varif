@@ -47,9 +47,7 @@ class Variants(object):
         headerline=vcffile[n-1]
         self.check_vcf_header(headerline.split("\t"))
         samplesRanks=[self.vcfHeaderSorted[sample] for sample in self.samples]
-        while n < len(vcffile):
-            line=vcffile[n].split("\t")
-            
+        while n < len(vcffile):            
             variant=Variant(vcffile[n], self.ranks, self.samples, samplesRanks)
             variant.calculate_ratios()
             variant.scores_from_ratios()

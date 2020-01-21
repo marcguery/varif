@@ -18,6 +18,8 @@ class Variant(object):
         self.counts=counts
         self.ratios={}
         self.scores=[]
+        self.maximum=99999
+        self.minimum=-99999
     
     @property
     def category(self):
@@ -26,16 +28,16 @@ class Variant(object):
         else:
             return "INDEL"
     
-    def calculate_ratios(self, mindepth=6):
+    def calculate_ratios(self, mindepth=5):
         #Handling division by zero, when there is no ref
         for sample in self.counts:
-            if sum(self.counts[sample]) < mindepth:
+            if sum(self.counts[sample]) <= mindepth:
                 self.ratios[sample]=[math.nan]*len(self.counts[sample])
             else:
                 self.ratios[sample]=[ad/sum(self.counts[sample]) for ad in self.counts[sample]]
         return self.ratios
 
-    def scores_from_ratios(self, maxprop=0.1, minprop=None):
+    def scores_from_ratios(self, maxprop=0.2, minprop=None):
         assert self.ratios != {}
         minprop=1-maxprop if minprop is None else minprop
 
@@ -53,8 +55,8 @@ class Variant(object):
                 self.scores.append(0)
             #Ambiguous variants
             elif minratio >= maxprop or maxratio <= minprop:
-                self.scores.append(-maxratio/minratio if minratio != 0 else -math.inf)
+                self.scores.append(-maxratio/minratio if minratio != 0 else self.minimum)
             #True Variants
             elif minratio < maxprop and maxratio > minprop:
-                self.scores.append(maxratio/minratio if minratio != 0 else math.inf)
+                self.scores.append(maxratio/minratio if minratio != 0 else self.maximum)
         return self.scores
