@@ -46,7 +46,7 @@ As a result, the highest scores will be associated with sites probably different
 
 ## Minimal depth
 
-The depth above which all the read counts of the corresponding sample are set to null.
+The depth below which all the read counts of the corresponding sample are set to null.
 For all these samples, proportions are NA values.
 
 ## Cut-off proportions
