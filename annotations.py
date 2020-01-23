@@ -35,6 +35,7 @@ class Annotations(object):
                 'start':annotation.start,
                 'end':annotation.end,
                 'strand':annotation.strand,
+                'phase':annotation.phase,
                 'annotation':annotation.annotation,
                 'parents':annotation.parents,
                 'description':annotation.description

@@ -50,24 +50,32 @@ class Varif(object):
                 finished=True
         return identifiers
     
-    def get_codon_from_mutation(self, chromosome, position, mutation, gffIds):
-        startMutation=position
-        codons=[]
-        for gffId in gffIds:
-            if self.annotations.annotations[gffId]['annotation']!='exon':
-                continue
-            startExon=self.annotations.annotations[gffId]['start']
-            endExon=self.annotations.annotations[gffId]['end']
-            oldExon=self.fasta.data[chromosome][startExon-1:endExon]
-            newExon=self.fasta.data[chromosome][startExon-1:endExon]
-            newExon=newExon[0:startMutation-startExon]+'re'+mutation+'re'+newExon[startMutation-startExon+len(mutation):]
-        return codons
+    def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId):
+        assert self.annotations.annotations[gffId]['annotation']=='CDS'
+        phase=int(self.annotations.annotations[gffId]['phase'])
+        strand=self.annotations.annotations[gffId]['strand']
+        startCDS=self.annotations.annotations[gffId]['start']
+        endCDS=self.annotations.annotations[gffId]['end']
+        startIndex=position-1
+        endIndex=position+len(reference)-1
+        if strand=="+":
+            print(position)
+            phase=(phase+startIndex-2+1-startCDS)%3
+        elif strand=="-":
+            phase=(phase+endIndex+2-endCDS)%3
+        oldCDS=self.fasta.data[chromosome][startIndex-2:endIndex+2]
+        oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
+
+        newCDS=self.fasta.data[chromosome][startIndex-2:startIndex]+mutation+self.fasta.data[chromosome][endIndex:endIndex+2]
+        newProt=self.fasta.translate_CDS(newCDS, strand, phase)
+        aaChanges=[oldProt, newProt]
+        return aaChanges
 
     def get_scores(self, fixed=False, allVariants=False, allRegions=False, show=False, csv="Variants.csv"):
         code=0 if fixed is True else 1
         code=-math.inf if allVariants is True else code
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
-        printedLine="Chromsome, Position, Type, Ref, Alt, Score, Annotation,"
+        printedLine="Chromsome, Position, Type, Ref, Alt, AAref, AAalts, Score, Annotation,"
         printedLine+=",".join(self.variants.samples)+"\n"
         for key in sortedKeys:
             if not any(score>=code for score in self.variants.variants[key]["scores"]):
@@ -77,17 +85,30 @@ class Varif(object):
             gffIds=self.map_GFFid_VCFpos(chrom, pos)
             if len(gffIds)==0 and allRegions is False:
                 continue
-            codons=[self.get_codon_from_mutation(chrom, pos, alt, gffIds) for alt in self.variants.variants[key]["alts"]]
+            for gffId in gffIds:
+                if self.annotations.annotations[gffId]['annotation']!='CDS':
+                    continue
+                
+                self.variants.variants[key]["aaAlts"][gffId]=[]
+
+                for alt in self.variants.variants[key]["alts"]:
+                    aaDiff=self.get_aa_from_mutation(chrom, pos, self.variants.variants[key]["ref"], alt, gffId)
+                    self.variants.variants[key]["aaAlts"][gffId].append(aaDiff[1])
+                self.variants.variants[key]["aaRef"][gffId]=aaDiff[0]
             printedLine+=key.split(":")[0]+","
             printedLine+=key.split(":")[1]+","
             printedLine+=self.variants.variants[key]["category"]+","
             printedLine+=self.variants.variants[key]["ref"]+","
             printedLine+=";".join(self.variants.variants[key]["alts"])+","
-            printedLine+=";".join([str(score) for score in self.variants.variants[key]["scores"]])+","
-            if len(gffIds)>0:
-                printedLine+=":".join([self.annotations.annotations[gffId]['description']+" ("+gffId+")" for gffId in gffIds])
+            if len(gffIds) > 0:
+                printedLine+=":".join([self.variants.variants[key]["aaRef"][gffId]+" ("+gffId+")" for gffId in self.variants.variants[key]["aaRef"]])+","
+                printedLine+=":".join([";".join(self.variants.variants[key]["aaAlts"][gffId])+" ("+gffId+")" for gffId in self.variants.variants[key]["aaAlts"]])+","
+                printedLine+=":".join([self.annotations.annotations[gffId]['description']+" ("+gffId+")" for gffId in gffIds])+","
             else:
                 printedLine+="NA,"
+                printedLine+="NA,"
+                printedLine+="NA,"
+            printedLine+=";".join([str(score) for score in self.variants.variants[key]["scores"]])+","
             for index,sample in enumerate(self.variants.variants[key]["ratios"]):
                 printedLine+=";".join([str(self.variants.variants[key]["ratios"][sample][rank]) for rank in range(1,len(self.variants.variants[key]["ratios"][sample]))])
                 printedLine+="," if index < len(self.variants.variants[key]["ratios"])-1 else "\n"

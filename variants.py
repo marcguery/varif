@@ -60,5 +60,6 @@ class Variants(object):
             self.variants[identifier]={
                 "scores":variant.scores, "category":variant.category,
                 "ref":variant.ref, "alts":variant.alts, 
-                "ratios":variant.ratios}
+                "ratios":variant.ratios,
+                "aaRef":{}, "aaAlts":{}}
             n+=1
