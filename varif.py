@@ -25,7 +25,7 @@ class Varif(object):
             maxi=self.annotations.positions[chromosome][index][1]
             if position >= mini and position <= maxi:
                 n=0
-                while position >= mini and position <= maxi:
+                while position >= mini and position <= maxi and index < maxValue:
                     identifiers.append(self.annotations.positions[chromosome][index][2])
                     index+=1
                     n+=1
@@ -34,13 +34,13 @@ class Varif(object):
                 index=index-n-1
                 mini=self.annotations.positions[chromosome][index][0]
                 maxi=self.annotations.positions[chromosome][index][1]
-                while position >= mini and position <= maxi:
+                while position >= mini and position <= maxi and index > minValue:
                     identifiers.append(self.annotations.positions[chromosome][index][2])
                     index-=1
                     mini=self.annotations.positions[chromosome][index][0]
                     maxi=self.annotations.positions[chromosome][index][1]
                 finished=True
-            if position > maxi and index < maxValue:
+            elif position > maxi and index < maxValue:
                 minValue=index+1
                 index=math.ceil((maxValue+index)/2)
             elif position < mini and index > minValue:
@@ -70,7 +70,7 @@ class Varif(object):
         aaChanges=[oldProt, newProt]
         return aaChanges
 
-    def get_scores(self, fixed=False, allVariants=False, allRegions=False, show=False, csv="Variants.csv"):
+    def get_scores(self, fixed=True, allVariants=False, allRegions=False, show=False, csv="Variants.csv"):
         code=0 if fixed is True else 1
         code=-math.inf if allVariants is True else code
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
@@ -110,7 +110,7 @@ class Varif(object):
                     printedLine+="NA;"
                 printedLine+=str(self.variants.variants[key]["scores"][altIndex])+";"
                 for sampIndex,sample in enumerate(self.variants.variants[key]["ratios"]):
-                    printedLine+=str(self.variants.variants[key]["ratios"][sample][altIndex])
+                    printedLine+=str(self.variants.variants[key]["ratios"][sample][altIndex+1])
                     printedLine+=";" if sampIndex < len(self.variants.variants[key]["ratios"])-1 else "\n"
         if show is True:
             print(printedLine)
