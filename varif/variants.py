@@ -1,5 +1,5 @@
-from config import Config
-from variant import Variant
+from .config import Config
+from .variant import Variant
 
 class Variants(object):
     """A bunch if variants taken from a VCF file."""

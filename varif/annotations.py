@@ -1,4 +1,4 @@
-from annotation import Annotation
+from .annotation import Annotation
 
 class Annotations(object):
     """A bunch of annotations of a GFF3 file."""

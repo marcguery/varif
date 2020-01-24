@@ -1,11 +1,11 @@
 import math
-from config import Config
-from variants import Variants
-from annotations import Annotations
-from fasta import Fasta
+from .config import Config
+from .variants import Variants
+from .annotations import Annotations
+from .fasta import Fasta
 
 
-class Varif(object):
+class Connection(object):
     """Filter and annotate variants different or fixed among samples"""
 
     def __init__(self, **options):

@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from config import Config
+from .config import Config
 
 class Variant(object):
     """A parsed line of a VCF, requiring AD for each sample."""

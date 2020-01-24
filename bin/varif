@@ -1,6 +1,6 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 import sys
-from varif import Varif
+from varif.connection import Connection
 
 if __name__ == "__main__":
     argValmap={}
@@ -19,4 +19,4 @@ if __name__ == "__main__":
             argValmap[sys.argv[n].lstrip("-")]=None
             n+=1
 
-    Varif(**argValmap)
+    Connection(**argValmap)
