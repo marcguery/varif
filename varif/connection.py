@@ -50,6 +50,7 @@ class Connection(object):
         #Half of those
         index=math.floor(maxValue-minValue/2)
         identifiers=[]
+        #Finding a random feature
         while not finished:
             #Minimum position of the feature checked
             mini=self.annotations.positions[chromosome][index][0]
@@ -57,25 +58,6 @@ class Connection(object):
             maxi=self.annotations.positions[chromosome][index][1]
             #The feature surrounds the variant
             if position >= mini and position <= maxi:
-                #Going upper to find all features above
-                n=0
-                while position >= mini and index < maxValue:
-                    if position <= maxi:
-                        identifiers.append(self.annotations.positions[chromosome][index][2])
-                    index+=1
-                    n+=1
-                    mini=self.annotations.positions[chromosome][index][0]
-                    maxi=self.annotations.positions[chromosome][index][1]
-                #Going lower to find all features below
-                index=index-n-1
-                mini=self.annotations.positions[chromosome][index][0]
-                maxi=self.annotations.positions[chromosome][index][1]
-                while position <= maxi and index > minValue:
-                    if position >= mini:
-                        identifiers.append(self.annotations.positions[chromosome][index][2])
-                    index-=1
-                    mini=self.annotations.positions[chromosome][index][0]
-                    maxi=self.annotations.positions[chromosome][index][1]
                 finished=True
             #The variant is in upper half of the cut
             elif position > maxi and index < maxValue:
@@ -87,7 +69,28 @@ class Connection(object):
                 index=math.floor((index+minValue)/2)
             #The variant is not surrouded by a feature
             else:
-                finished=True
+                return identifiers
+        #Adding other features
+        #Going upper to find all features above
+        n=0
+        while position >= mini and index < maxValue:
+            if position <= maxi:
+                identifiers.append(self.annotations.positions[chromosome][index][2])
+            index+=1
+            n+=1
+            mini=self.annotations.positions[chromosome][index][0]
+            maxi=self.annotations.positions[chromosome][index][1]
+        #Going lower to find all features below
+        index=index-n-1
+        mini=self.annotations.positions[chromosome][index][0]
+        maxi=self.annotations.positions[chromosome][index][1]
+        while position <= maxi and index > minValue:
+            if position >= mini:
+                identifiers.append(self.annotations.positions[chromosome][index][2])
+            index-=1
+            mini=self.annotations.positions[chromosome][index][0]
+            maxi=self.annotations.positions[chromosome][index][1]
+                
         return identifiers
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId):
