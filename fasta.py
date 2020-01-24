@@ -1,5 +1,12 @@
 class Fasta(object):
+    """Handle FASTA files and basic operations on bases."""
     def __init__(self):
+        """
+        data (dict) : Key (chromosome), value (sequence)
+        dnatable (dict) : Map of codons and aminoacids
+        dnareverse (dict) : Map of complementary bases
+
+        """
         self.data={}
         self.dnatable={ 
         'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M', 
@@ -24,9 +31,17 @@ class Fasta(object):
         }
     
     def load_data_from_FASTA(self, fasta):
+        """
+        Store a list of chromosomes from FASTA
+
+        fasta (str) : File path of FASTA file
+
+        """
         with open(fasta, 'r') as fastaFile:
             fastaInfo=[line.rstrip("\n") for line in fastaFile]
+            #Looking for headers
             fastaHeaders=[index for index, line in enumerate(fastaInfo) if line[0]==">"]
+            #Iterating over headers only
             n=1
             while n < len(fastaHeaders):
                 currentIdx=fastaHeaders[n-1]
@@ -38,6 +53,13 @@ class Fasta(object):
             self.data[chromosome]="".join(fastaInfo[nextIdx+1:])
     
     def reverse_strand(self, cds):
+        """
+        Get the complement of a DNA sequence
+
+        cds (str) : Upper case of base sequences
+
+        return (str) : The reverted sequence
+        """
         cds=cds[::-1]
         newcds=""
         for i in range(len(cds)):
@@ -45,6 +67,15 @@ class Fasta(object):
         return newcds
 
     def translate_CDS(self, cds, strand, phase):
+        """
+        Translate a DNA strand to a protein
+
+        cds (str) : The upper case list of bases
+        strand (str) : The strand to tell how to read CDS; '+' or '-'
+        phase (int) : The number of bases to skip before the first codon
+
+        return (str) : The upper case list of aminoacids
+        """
         protein=""
         aminoacid=""
         cds=self.reverse_strand(cds) if strand=="-" else cds

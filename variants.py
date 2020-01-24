@@ -1,7 +1,16 @@
 from variant import Variant
 
 class Variants(object):
+    """A bunch if variants taken from a VCF file."""
     def __init__(self):
+        """
+        variants (dict) : Key (ID of the variant), value (Info on the variant)
+        vcfHeaderExpected (list) : Order expected of the fields in the VCF
+        vcfHeaderSorted (dict) : Key (Name of field), value (order of field)
+        samples (list) : Name of samples
+        ranks (list) : Rank of each field in VCF
+
+        """
         self.variants={}
         self.vcfHeaderExpected=[
             "#CHROM", "POS", "ID",
@@ -10,6 +19,7 @@ class Variants(object):
         self.vcfHeaderSorted={colname:i for i,colname in enumerate(self.vcfHeaderExpected)}
         self.samples=[]
 
+        #A very complicated stuff where a simple order to follow would have been enough
         chromRank=self.vcfHeaderSorted[self.vcfHeaderExpected[0]]
         posRank=self.vcfHeaderSorted[self.vcfHeaderExpected[1]]
         idRank=self.vcfHeaderSorted[self.vcfHeaderExpected[2]]
@@ -25,9 +35,16 @@ class Variants(object):
             refRank, altsRank, qualRank,
             filterRank, infoRank, formatRank]
     def check_vcf_header(self, header):
+        """
+        Check if VCF format is expected and stroe sample names from the end
+
+        header (list) : Name of fields in the actual VCF
+        """
         try:
             assert set(self.vcfHeaderExpected).difference(set(header))==set()
+            #Reset vcfHeaderSorted with actual header
             self.vcfHeaderSorted={colname.strip("\n"):i for i,colname in enumerate(header)}
+            #Assuming that samples are at the end
             n=len(header)-1
             colname=header[n].rstrip("\n")
             while colname != self.vcfHeaderExpected[-1] and n >= 0:
@@ -38,21 +55,33 @@ class Variants(object):
             print("Bad VCF header")
 
     def load_variants_from_VCF(self, vcf):
+        """
+        Store variant found at each line of VCF
+
+        vcf (str) : File path of VCF file
+
+        """
         vcffile=open(vcf, 'r').readlines()
         n=0
         line=vcffile[n]
+        #Getting rid of the header
         while line.startswith('##') and n < len(vcffile):
             line=vcffile[n]
             n+=1
         headerline=vcffile[n-1]
+        #Check VCF formatting
         self.check_vcf_header(headerline.split("\t"))
         samplesRanks=[self.vcfHeaderSorted[sample] for sample in self.samples]
+        #Storing variants
         while n < len(vcffile):            
             variant=Variant(vcffile[n], self.ranks, self.samples, samplesRanks)
             variant.calculate_ratios()
             variant.scores_from_ratios()
 
+            #Generate unique ID for each variant
             identifier=variant.chromosome+":"+variant.position
+            #For same Chromosome/position variants 
+            # which are on same line or on different lines
             num=0
             while identifier in self.variants:
                 num+=1

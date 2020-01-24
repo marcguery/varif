@@ -2,7 +2,27 @@ import math
 import numpy as np
 
 class Variant(object):
+    """A parsed line of a VCF, requiring AD for each sample."""
     def __init__(self, vcfLine, ranks, samples, samplesRanks):
+        """
+        Arguments:
+        vcfLine (str) : Raw VCF line
+        ranks (list) : Order of fields as in VCF specs
+        sample (list) : Name of samples 
+        samplesRanks (list) : Order of samples given in argument
+
+        chromosome (str) : Name of chromosome
+        position (str) : Position of variant
+        ref (str) : Reference sequence of variant starting at position
+        alts (list) : Alternate sequences at position
+        counts (dict) : Key (sample name), value (AD count for ref and alts)
+        ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
+        scores (list) : Score of each alt
+        maximum (int) : Score attributed to x/0
+        minimum (int) : Score attributed to -x/0
+        category (str) : Type of variant : 'SNP' or 'INDEL'
+
+        """
         vcfLine=vcfLine.split("\t")
         self.chromosome=vcfLine[ranks[0]]
         self.position=vcfLine[ranks[1]]
@@ -14,8 +34,7 @@ class Variant(object):
             if formatSplitted[i] == "AD":
                 adRank=i
                 break
-        counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks)}
-        self.counts=counts
+        self.counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks)}
         self.ratios={}
         self.scores=[]
         self.maximum=99999
@@ -29,6 +48,15 @@ class Variant(object):
             return "INDEL"
     
     def calculate_ratios(self, mindepth=5):
+        """
+        Get the ratio for each alternate count of the variant
+
+        mindepth (int) : Minmal depth for a sample to consider its counts
+        To show every variant later, mindepth must be 0
+
+        return (dict) : Ratios for each ref and alts
+
+        """
         #Handling division by zero, when there is no ref
         for sample in self.counts:
             if sum(self.counts[sample]) <= mindepth:
@@ -38,6 +66,15 @@ class Variant(object):
         return self.ratios
 
     def scores_from_ratios(self, maxprop=0.2, minprop=None):
+        """
+        Get the scores for each alt of the variant
+
+        maxprop (float) : Value above which a ratio is not considered a True ref
+        minprop (float) : Value below which a ratio is not considered a True alt
+
+        return (list) : Score for each alt of the variant
+
+        """
         assert self.ratios != {}
         minprop=1-maxprop if minprop is None else minprop
 
