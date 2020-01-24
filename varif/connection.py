@@ -165,6 +165,8 @@ class Connection(object):
                 self.variants.variants[key]["aaRef"][gffId]=aaDiff[0]
             #Each alt has its line
             for altIndex, alt in enumerate(self.variants.variants[key]["alts"]):
+                if self.variants.variants[key]["scores"][altIndex] < code:
+                    continue
                 #Chromosome
                 printedLine+=key.split(":")[0]+";"
                 #Position
