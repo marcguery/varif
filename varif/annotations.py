@@ -63,6 +63,6 @@ class Annotations(object):
             n+=1
         if len(annotationWithoutDesc) > 0:
             print("There were unresolved descriptions : \n%s"%", ".join(annotationWithoutDesc))
-        #Feature coordinates need to be sorted for variant mapping
+        #Feature coordinates need to be sorted by start then end for variant mapping
         for chromosome in self.positions:
-            self.positions[chromosome]=sorted(self.positions[chromosome], key=lambda x : x[0])
+            self.positions[chromosome]=sorted(self.positions[chromosome], key=lambda x : (x[0], x[1]))

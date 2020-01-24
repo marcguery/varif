@@ -28,9 +28,9 @@ class Connection(object):
         self.fasta=Fasta()
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
         self.get_scores(
-            Config.options["fixed"], Config.options["allVariants"],
-            Config.options["allRegions"], Config.options["show"],
-            Config.options["csv"])
+            fixed=Config.options["fixed"], allVariants=Config.options["allVariants"],
+            allRegions=Config.options["allRegions"], show=Config.options["show"],
+            csv=Config.options["csv"])
     
     def map_GFFid_VCFpos(self, chromosome, position):
         """
@@ -59,8 +59,9 @@ class Connection(object):
             if position >= mini and position <= maxi:
                 #Going upper to find all features above
                 n=0
-                while position >= mini and position <= maxi and index < maxValue:
-                    identifiers.append(self.annotations.positions[chromosome][index][2])
+                while position >= mini and index < maxValue:
+                    if position <= maxi:
+                        identifiers.append(self.annotations.positions[chromosome][index][2])
                     index+=1
                     n+=1
                     mini=self.annotations.positions[chromosome][index][0]
@@ -69,8 +70,9 @@ class Connection(object):
                 index=index-n-1
                 mini=self.annotations.positions[chromosome][index][0]
                 maxi=self.annotations.positions[chromosome][index][1]
-                while position >= mini and position <= maxi and index > minValue:
-                    identifiers.append(self.annotations.positions[chromosome][index][2])
+                while position <= maxi and index > minValue:
+                    if position >= mini:
+                        identifiers.append(self.annotations.positions[chromosome][index][2])
                     index-=1
                     mini=self.annotations.positions[chromosome][index][0]
                     maxi=self.annotations.positions[chromosome][index][1]
@@ -81,7 +83,7 @@ class Connection(object):
                 index=math.ceil((maxValue+index)/2)
             #The variant is in lower half of the cut
             elif position < mini and index > minValue:
-                maxValue=index-1
+                maxValue=index
                 index=math.floor((index+minValue)/2)
             #The variant is not surrouded by a feature
             else:
@@ -156,7 +158,6 @@ class Connection(object):
                 #No CDS feature
                 if self.annotations.annotations[gffId]['annotation']!='CDS':
                     continue
-                
                 self.variants.variants[key]["aaAlts"][gffId]=[]
                 for alt in self.variants.variants[key]["alts"]:
                     aaDiff=self.get_aa_from_mutation(chrom, pos, self.variants.variants[key]["ref"], alt, gffId)
