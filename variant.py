@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from config import Config
 
 class Variant(object):
     """A parsed line of a VCF, requiring AD for each sample."""
@@ -37,8 +38,8 @@ class Variant(object):
         self.counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks)}
         self.ratios={}
         self.scores=[]
-        self.maximum=99999
-        self.minimum=-99999
+        self.maximum=Config.options["maximum"]
+        self.minimum=Config.options["minimum"]
     
     @property
     def category(self):
@@ -47,7 +48,7 @@ class Variant(object):
         else:
             return "INDEL"
     
-    def calculate_ratios(self, mindepth=5):
+    def calculate_ratios(self, mindepth):
         """
         Get the ratio for each alternate count of the variant
 
@@ -65,7 +66,7 @@ class Variant(object):
                 self.ratios[sample]=[ad/sum(self.counts[sample]) for ad in self.counts[sample]]
         return self.ratios
 
-    def scores_from_ratios(self, maxprop=0.2, minprop=None):
+    def scores_from_ratios(self, maxprop, minprop):
         """
         Get the scores for each alt of the variant
 

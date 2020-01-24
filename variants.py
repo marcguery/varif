@@ -1,3 +1,4 @@
+from config import Config
 from variant import Variant
 
 class Variants(object):
@@ -18,6 +19,7 @@ class Variants(object):
             "INFO", "FORMAT"]
         self.vcfHeaderSorted={colname:i for i,colname in enumerate(self.vcfHeaderExpected)}
         self.samples=[]
+        self.config=Config
 
         #A very complicated stuff where a simple order to follow would have been enough
         chromRank=self.vcfHeaderSorted[self.vcfHeaderExpected[0]]
@@ -75,8 +77,10 @@ class Variants(object):
         #Storing variants
         while n < len(vcffile):            
             variant=Variant(vcffile[n], self.ranks, self.samples, samplesRanks)
-            variant.calculate_ratios()
-            variant.scores_from_ratios()
+            variant.calculate_ratios(self.config.options["mindepth"])
+            variant.scores_from_ratios(
+                self.config.options["maxprop"], 
+                self.config.options["minprop"])
 
             #Generate unique ID for each variant
             identifier=variant.chromosome+":"+variant.position

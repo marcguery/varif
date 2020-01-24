@@ -1,4 +1,5 @@
 import math
+from config import Config
 from variants import Variants
 from annotations import Annotations
 from fasta import Fasta
@@ -7,7 +8,7 @@ from fasta import Fasta
 class Varif(object):
     """Filter and annotate variants different or fixed among samples"""
 
-    def __init__(self, vcf, gff, fasta):
+    def __init__(self, **options):
         """
         Arguments:
         vcf (str) : File path of VCF
@@ -19,12 +20,17 @@ class Varif(object):
         annotations (Annotations) : Annotations object
         fasta (Fasta) : Fasta object
         """
+        Config.set_options(options)
         self.variants=Variants()
-        self.variants.load_variants_from_VCF(vcf)
+        self.variants.load_variants_from_VCF(Config.options['vcf'])
         self.annotations=Annotations()
-        self.annotations.load_annotations_from_GFF(gff)
+        self.annotations.load_annotations_from_GFF(Config.options['gff'])
         self.fasta=Fasta()
-        self.fasta.load_data_from_FASTA(fasta)
+        self.fasta.load_data_from_FASTA(Config.options['fasta'])
+        self.get_scores(
+            Config.options["fixed"], Config.options["allVariants"],
+            Config.options["allRegions"], Config.options["show"],
+            Config.options["csv"])
     
     def map_GFFid_VCFpos(self, chromosome, position):
         """
@@ -117,7 +123,7 @@ class Varif(object):
         aaChanges=[oldProt, newProt]
         return aaChanges
 
-    def get_scores(self, fixed=True, allVariants=False, allRegions=False, show=False, csv="Variants.csv"):
+    def get_scores(self, fixed, allVariants, allRegions, show, csv):
         """
         Retrieve and merge information about the variants filtered
 
