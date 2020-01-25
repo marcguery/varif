@@ -1,64 +1,66 @@
+import argparse
+
 class Config(object):
-    mandatoryOptions={
-        "vcf":None,
-        "gff":None,
-        "fasta":None}
-    intOptions={
-        "mindepth":5,
-        "maximum":99999, "minimum":-99999,
-    }
-    floatOptions={
-        "maxprop":0.2, "minprop":0.8,
-    }
-    boolOptions={
-        "fixed":False, "allVariants":False,
-        "allRegions":False, "show":False,
-    }
-    strOptions={
-        "csv":"Variants.csv"
-    }
-    options={**intOptions, **floatOptions, **boolOptions, **strOptions}
-    lengthOptions=len(options)+len(mandatoryOptions)
+    options={}
 
     @staticmethod
-    def set_options(options):
-        for option in options:
-            if option in Config.intOptions:
-                try:
-                    options[option]=int(options[option])
-                except:
-                    print("Integer option %s is not well formatted"%option)
-                    continue
-            elif option in Config.floatOptions:
-                try:
-                    options[option]=float(options[option])
-                except:
-                    print("Float option %s is not well formatted"%option)
-                    continue
-            elif option in Config.boolOptions:
-                try:
-                    assert options[option]==True
-                except:
-                    print("Integer option %s is not well formatted"%option)
-                    continue
-            elif option in Config.strOptions:
-                try:
-                    assert type(options[option]) is str
-                except:
-                    print("String option %s is not well formatted"%option)
-                    continue               
-            elif option in Config.mandatoryOptions:
-                try:
-                    assert type(options[option]) is str
-                except:
-                    print("String option %s is not well formatted"%option)
-                    continue
-            else:
-                print("Ignored option %s"%option)
-                continue
-            
-            Config.options[option]=options[option]
-        if len(Config.options) < Config.lengthOptions:
-            print("Some mandatory options:\n%s\nare missing from your options:\n%s"
-            %(", ".join(Config.mandatoryOptions.keys()), ", ".join(options)))
-            raise(Exception)
+    def set_options():
+        parser=argparse.ArgumentParser(
+            description='''
+            Filter and annotate variants likely to be
+            differentially expressed (or fixed) among your sample(s)
+            wih varif.
+            ''')
+        parser.add_argument('-vcf', required=True, type=str,
+        metavar="FILE",
+        help='VCF file')
+
+        parser.add_argument('-gff', required=True, type=str,
+        metavar="FILE",
+        help='GFF3 file')
+
+        parser.add_argument('-fasta', required=True, type=str,
+        metavar="FILE",
+        help='FASTA file')
+
+        parser.add_argument('--fixed', dest='fixed', action='store_true',
+        help='Add fixed variants in the result')
+        parser.add_argument('--no-fixed', dest='fixed', action='store_false',
+        help='Do not add fixed variants in the result')
+
+        parser.add_argument('--all-variants', dest='allVariants', action='store_true',
+        help='Add all variants in the result')
+        parser.add_argument('--best-variants', dest='allVariants', action='store_false',
+        help='Add only variants whose score is positive')
+
+        parser.add_argument('--all-regions', dest='allRegions', action='store_true',
+        help='Add variants from all regions of the genome')
+        parser.add_argument('--gene-regions', dest='allRegions', action='store_false',
+        help='Add variants only in gene-annotated regions')
+
+        parser.add_argument('--show', dest='show', action='store_true',
+        help='Print result to stdout')
+        parser.add_argument('--no-show', dest='show', action='store_false',
+        help='Do not print any result')
+
+        parser.add_argument('--depth', dest='mindepth', type=int, default=5,
+        metavar="DEPTH",
+        help='Minmal total read depth for a alt to be considered')
+        parser.add_argument('--ratio-alt', dest='minprop', type=float, default=0.8,
+        metavar="RATIO",
+        help='Minmal ratio of alt/total depth to call it true alt')
+        parser.add_argument('--ratio-no-alt', dest='maxprop', type=float, default=0.2,
+        metavar="RATIO",
+        help='Maximal ratio of alt/total depth to call it true ref')
+
+        parser.add_argument('--csv', dest='csv', type=str, default="Variants.csv",
+        help='Name of the CSV file to be written')
+
+        parser.add_argument('--max-score', dest='maximum', type=int, default=99999,
+        metavar="SCORE",
+        help='Maximal score attributed to positive-score variants')
+        parser.add_argument('--min-score', dest='minimum', type=int, default=-99999,
+        metavar="SCORE",
+        help='Minimal score attributed to negative-score variants')
+        args=parser.parse_args()
+        Config.options=vars(args)

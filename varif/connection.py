@@ -8,19 +8,13 @@ from .fasta import Fasta
 class Connection(object):
     """Filter and annotate variants different or fixed among samples"""
 
-    def __init__(self, **options):
+    def __init__(self):
         """
-        Arguments:
-        vcf (str) : File path of VCF
-        gff (str) : File path of GFF3
-        fasta (str) : File path of Fasta
-        All files must have the same chromosome names
-
         variants (Variants) : Variants object
         annotations (Annotations) : Annotations object
         fasta (Fasta) : Fasta object
         """
-        Config.set_options(options)
+        Config.set_options()
         self.variants=Variants()
         self.variants.load_variants_from_VCF(Config.options['vcf'])
         self.annotations=Annotations()
