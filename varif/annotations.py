@@ -11,7 +11,37 @@ class Annotations(object):
         """
         self.annotations={}
         self.positions={}
+        self.index={}
         self.ranks=range(0,9)
+    
+    def index_gff(self):
+        features={}
+        for chromosome in self.positions:
+            self.positions[chromosome]=sorted(self.positions[chromosome], key=lambda x : x[0])
+            currentInd=0
+            beeingAddedInd=[0]
+            features[chromosome]=[(self.positions[chromosome][0][0], {self.positions[chromosome][0][1]:[self.positions[chromosome][0][2]]})]
+            for feature in self.positions[chromosome][1:]:
+                currentInd+=1
+                if feature[0]==features[chromosome][-1][0]:
+                    if feature[1] in features[chromosome][-1][1]:
+                        features[chromosome][-1][1][feature[1]].append(feature[2])
+                    else:
+                        features[chromosome][-1][1][feature[1]]=[feature[2]]
+                else:
+                    features[chromosome].append((feature[0], {feature[1]:[feature[2]]}))
+                    addedInd=beeingAddedInd
+                    beeingAddedInd=[0]
+                    indToCheck=addedInd+list(range(addedInd[-1]+1, currentInd))
+                    for i in indToCheck:
+                        if self.positions[chromosome][i][1] >= features[chromosome][-1][0]:
+                            if self.positions[chromosome][i][1] in features[chromosome][-1][1]:
+                                features[chromosome][-1][1][self.positions[chromosome][i][1]].append(self.positions[chromosome][i][2])
+                            else:
+                                features[chromosome][-1][1][self.positions[chromosome][i][1]]=[self.positions[chromosome][i][2]]
+                            beeingAddedInd.append(i)
+        features[chromosome]=sorted(features[chromosome], key=lambda x : x[0])
+        return features
 
     def load_annotations_from_GFF(self, gff):
         """
@@ -64,5 +94,4 @@ class Annotations(object):
         if len(annotationWithoutDesc) > 0:
             print("There were unresolved descriptions : \n%s"%", ".join(annotationWithoutDesc))
         #Feature coordinates need to be sorted by start then end for variant mapping
-        for chromosome in self.positions:
-            self.positions[chromosome]=sorted(self.positions[chromosome], key=lambda x : (x[0], x[1]))
+        self.index=self.index_gff()

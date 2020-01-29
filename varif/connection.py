@@ -35,21 +35,21 @@ class Connection(object):
 
         return (list) : Identifiers of GFF features retrieved
         """
-        #This is a half-cut sort
+        #This is a half-cut search
         finished=False
         #Maximum index of the feature to search
-        maxValue=len(self.annotations.positions[chromosome])-1
+        maxValue=len(self.annotations.index[chromosome])-2
         #Minimum index of the feature to search
         minValue=0
         #Half of those
-        index=math.floor(maxValue-minValue/2)
+        index=math.floor(maxValue+minValue/2)
         identifiers=[]
         #Finding a random feature
         while not finished:
             #Minimum position of the feature checked
-            mini=self.annotations.positions[chromosome][index][0]
+            mini=self.annotations.index[chromosome][index][0]
             #Maximum position of the feature checked
-            maxi=self.annotations.positions[chromosome][index][1]
+            maxi=self.annotations.index[chromosome][index+1][0]
             #The feature surrounds the variant
             if position >= mini and position <= maxi:
                 finished=True
@@ -64,27 +64,8 @@ class Connection(object):
             #The variant is not surrouded by a feature
             else:
                 return identifiers
-        #Adding other features
-        #Going upper to find all features above
-        n=0
-        while position >= mini and index < maxValue:
-            if position <= maxi:
-                identifiers.append(self.annotations.positions[chromosome][index][2])
-            index+=1
-            n+=1
-            mini=self.annotations.positions[chromosome][index][0]
-            maxi=self.annotations.positions[chromosome][index][1]
-        #Going lower to find all features below
-        index=index-n-1
-        mini=self.annotations.positions[chromosome][index][0]
-        maxi=self.annotations.positions[chromosome][index][1]
-        while position <= maxi and index > minValue:
-            if position >= mini:
-                identifiers.append(self.annotations.positions[chromosome][index][2])
-            index-=1
-            mini=self.annotations.positions[chromosome][index][0]
-            maxi=self.annotations.positions[chromosome][index][1]
-                
+        identPerPos=[self.annotations.index[chromosome][index][1][key] for key in self.annotations.index[chromosome][index][1] if key>=position]
+        identifiers=[identifier for position in identPerPos for identifier in position]
         return identifiers
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId):
@@ -143,7 +124,7 @@ class Connection(object):
         #Body
         for key in sortedKeys:
             #Filter
-            if not any(score>=code for score in self.variants.variants[key]["scores"]):
+            if not any(score >= code for score in self.variants.variants[key]["scores"]):
                 continue
             chrom=key.split(":")[0]
             pos=int(key.split(":")[1].split(".")[0])
@@ -162,7 +143,7 @@ class Connection(object):
                 self.variants.variants[key]["aaRef"][gffId]=aaDiff[0]
             #Each alt has its line
             for altIndex, alt in enumerate(self.variants.variants[key]["alts"]):
-                if self.variants.variants[key]["scores"][altIndex] < code:
+                if self.variants.variants[key]["scores"][altIndex] <= code:
                     continue
                 #Chromosome
                 printedLine+=key.split(":")[0]+";"
@@ -181,7 +162,7 @@ class Connection(object):
                     #Alt AA per CDS feature
                     printedLine+=":".join([self.variants.variants[key]["aaAlts"][gffId][altIndex] for gffId in self.variants.variants[key]["aaAlts"]])+";"
                     #Unique annotations found
-                    printedLine+=":".join(set(self.annotations.annotations[gffId]['description'] for gffId in gffIds))+";"
+                    printedLine+=":".join(set(self.annotations.annotations[gffId]['description']+" ("+gffId+")" for gffId in gffIds if self.annotations.annotations[gffId]['annotation']=="gene"))+";"
                 #No feature-surrounded variant
                 else:
                     printedLine+="NA;"
