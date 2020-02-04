@@ -86,15 +86,15 @@ class Connection(object):
         startCDS=self.annotations.annotations[gffId]['start']
         endCDS=self.annotations.annotations[gffId]['end']
         startIndex=position-1
-        endIndex=position+len(reference)-1
+        endIndex=startIndex+len(reference)
         #The number of bases to skip
         # knowing that the window is +2 -2 bases after mutation
         #Translation starts at start of feature
         if strand=="+":
-            phase=(phase+startIndex-2+1-startCDS)%3
+            phase=(startIndex-2-startCDS-1+phase)%3
         #Translation starts at end of feature
         elif strand=="-":
-            phase=(phase+endIndex+2-endCDS)%3
+            phase=(endIndex+2-endCDS-phase)%3
         oldCDS=self.fasta.data[chromosome][startIndex-2:endIndex+2]
         oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
 
