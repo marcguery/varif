@@ -115,7 +115,7 @@ class Connection(object):
 
         """
         #Filter by score to know what to show
-        code=0 if fixed is True else 1
+        code=-1 if fixed is True else 1
         code=-math.inf if allVariants is True else code
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         #Headers
@@ -124,7 +124,7 @@ class Connection(object):
         #Body
         for key in sortedKeys:
             #Filter
-            if not any(score >= code for score in self.variants.variants[key]["scores"]):
+            if not any(score > code for score in self.variants.variants[key]["scores"]):
                 continue
             chrom=key.split(":")[0]
             pos=int(key.split(":")[1].split(".")[0])

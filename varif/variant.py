@@ -63,7 +63,7 @@ class Variant(object):
             if sum(self.counts[sample]) <= mindepth:
                 self.ratios[sample]=[math.nan]*len(self.counts[sample])
             else:
-                self.ratios[sample]=[ad/sum(self.counts[sample]) for ad in self.counts[sample]]
+                self.ratios[sample]=[round(ad/sum(self.counts[sample]), 2) for ad in self.counts[sample]]
         return self.ratios
 
     def scores_from_ratios(self, maxprop, minprop):
@@ -93,8 +93,8 @@ class Variant(object):
                 self.scores.append(0)
             #Ambiguous variants
             elif minratio >= maxprop or maxratio <= minprop:
-                self.scores.append(-maxratio/minratio if minratio != 0 else self.minimum)
+                self.scores.append(round(-maxratio/minratio, 2) if minratio != 0 else self.minimum)
             #True Variants
             elif minratio < maxprop and maxratio > minprop:
-                self.scores.append(maxratio/minratio if minratio != 0 else self.maximum)
+                self.scores.append(round(maxratio/minratio, 2) if minratio != 0 else self.maximum)
         return self.scores
