@@ -91,7 +91,7 @@ class Connection(object):
         # knowing that the window is +2 -2 bases after mutation
         #Translation starts at start of feature
         if strand=="+":
-            phase=3 - ((startIndex-2-(startCDS-1+phase))%3)
+            phase=-(startIndex-2-(startCDS-1+phase))%3
         #Translation starts at end of feature
         elif strand=="-":
             phase=(endIndex+2-phase-endCDS)%3
