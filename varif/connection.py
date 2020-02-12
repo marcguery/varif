@@ -91,10 +91,10 @@ class Connection(object):
         # knowing that the window is +2 -2 bases after mutation
         #Translation starts at start of feature
         if strand=="+":
-            phase=(startIndex-2-startCDS-1+phase)%3
+            phase=3 - ((startIndex-2-(startCDS-1+phase))%3)
         #Translation starts at end of feature
         elif strand=="-":
-            phase=(endIndex+2-endCDS-phase)%3
+            phase=(endIndex+2-phase-endCDS)%3
         oldCDS=self.fasta.data[chromosome][startIndex-2:endIndex+2]
         oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
 
