@@ -119,7 +119,7 @@ class Connection(object):
         code=-math.inf if allVariants is True else code
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         #Headers
-        printedLine="Chromsome; Position; Type; Ref; Alt; AAref; AAalt; Annotation; Score;"
+        printedLine="Chromosome; Position; Type; Ref; Alt; AAref; AAalt; Annotation; Score;"
         printedLine+=";".join(self.variants.samples)+"\n"
         #Body
         for key in sortedKeys:
