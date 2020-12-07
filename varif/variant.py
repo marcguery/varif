@@ -18,12 +18,14 @@ class Variant(object):
         alts (list) : Alternate sequences at position
         counts (dict) : Key (sample name), value (AD count for ref and alts)
         ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
+        groups (dict) : Key (sample name), value (group depending on ratio of AD)
         scores (list) : Score of each alt
         maximum (int) : Score attributed to x/0
         minimum (int) : Score attributed to -x/0
         category (str) : Type of variant : 'SNP' or 'INDEL'
 
         """
+        self.config=Config
         vcfLine=vcfLine.split("\t")
         self.chromosome=vcfLine[ranks[0]]
         self.position=vcfLine[ranks[1]]
@@ -37,6 +39,7 @@ class Variant(object):
                 break
         self.counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks)}
         self.ratios={}
+        self.groups={key:[3]*len(self.counts[key]) for key in self.counts}
         self.scores=[]
         self.maximum=Config.options["maximum"]
         self.minimum=Config.options["minimum"]
@@ -47,6 +50,16 @@ class Variant(object):
             return "SNP"
         else:
             return "INDEL"
+
+    def make_groups(self, sample):
+        for i, ratio in enumerate(self.ratios[sample]):
+            if ratio < self.config.options["maxprop"]:
+                self.groups[sample][i]=0
+            elif ratio > self.config.options["minprop"]:
+                self.groups[sample][i]=1
+            else:
+                self.groups[sample][i]=2
+        
     
     def calculate_ratios(self, mindepth):
         """
@@ -64,19 +77,21 @@ class Variant(object):
                 self.ratios[sample]=[math.nan]*len(self.counts[sample])
             else:
                 self.ratios[sample]=[round(ad/sum(self.counts[sample]), 2) for ad in self.counts[sample]]
+                self.make_groups(sample)
         return self.ratios
 
-    def scores_from_ratios(self, maxprop, minprop):
+    def scores_from_ratios(self):
         """
         Get the scores for each alt of the variant
-
-        maxprop (float) : Value above which a ratio is not considered a True ref
-        minprop (float) : Value below which a ratio is not considered a True alt
 
         return (list) : Score for each alt of the variant
 
         """
         assert self.ratios != {}
+        #Value below which a ratio is not considered a True alt
+        minprop=self.config.options["minprop"]
+        #Value above which a ratio is not considered a True ref
+        maxprop=self.config.options["maxprop"]
         minprop=1-maxprop if minprop is None else minprop
 
         assert 0 < maxprop < 0.5 and 0.5 < minprop < 1

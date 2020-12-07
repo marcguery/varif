@@ -61,8 +61,10 @@ These scores will be saved in a CSV file whose headers are:
 - Sample#1: Proportion of alternate allele for sample 1
 - ...
 - Sample#n: Proportion of alternate allele for sample n
-
-
+- Con: Samples having the reference sequence
+- Mut: Sample having the alternate sequence
+- Mix: Samples having a mixture of sequences
+- Und: Samples having not enough depth at this position
 
 # Filters
 

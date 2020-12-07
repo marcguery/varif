@@ -78,9 +78,7 @@ class Variants(object):
         while n < len(vcffile):            
             variant=Variant(vcffile[n], self.ranks, self.samples, samplesRanks)
             variant.calculate_ratios(self.config.options["mindepth"])
-            variant.scores_from_ratios(
-                self.config.options["maxprop"], 
-                self.config.options["minprop"])
+            variant.scores_from_ratios()
 
             #Generate unique ID for each variant
             identifier=variant.chromosome+":"+variant.position
@@ -91,8 +89,10 @@ class Variants(object):
                 num+=1
                 identifier=identifier.split(".")[0]+"."+str(num)
             self.variants[identifier]={
+                "chromosome":variant.chromosome, "position":int(variant.position),
                 "scores":variant.scores, "category":variant.category,
                 "ref":variant.ref, "alts":variant.alts, 
-                "ratios":variant.ratios,
+                "ratios":variant.ratios, "groups":variant.groups,
+                "features":[],
                 "aaRef":{}, "aaAlts":{}}
             n+=1

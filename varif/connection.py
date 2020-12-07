@@ -21,7 +21,7 @@ class Connection(object):
         self.annotations.load_annotations_from_GFF(Config.options['gff'])
         self.fasta=Fasta()
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
-        self.get_scores(
+        self.get_all_alts(
             fixed=Config.options["fixed"], allVariants=Config.options["allVariants"],
             allRegions=Config.options["allRegions"], show=Config.options["show"],
             csv=Config.options["csv"])
@@ -103,7 +103,71 @@ class Connection(object):
         aaChanges=[oldProt, newProt]
         return aaChanges
 
-    def get_scores(self, fixed, allVariants, allRegions, show, csv):
+    def print_line(self, variantId=None, altIndex=0, sep=";"):
+        """
+        Create a line for the final output of varif using each alt's variant
+
+        variantId (str) : The unique identifier of the variant
+        altIndex (int) : The index of the alt of this variant
+        sep (str) : The field separator
+
+        return (str) : The line of the header or of each alt
+
+        """
+        if variantId is None:
+            baseHeader=[
+                "Chromosome", "Position", "Type",
+                "Ref", "Alt", "AAref", "AAalt",
+                "Annotation","Score"]
+            line=sep.join(baseHeader+self.variants.samples+["Con", "Mut", "Mix", "Und"])+"\n"
+        else:
+            content=[
+                self.variants.variants[variantId]["chromosome"], str(self.variants.variants[variantId]["position"]), 
+                self.variants.variants[variantId]["category"],
+                self.variants.variants[variantId]["ref"], self.variants.variants[variantId]["alts"][altIndex],
+                "NA", "NA", "NA",
+                str(self.variants.variants[variantId]["scores"][altIndex])]
+            content+=["NA"]*len(self.variants.samples)
+            content+=["NA", "NA", "NA", "NA"]
+
+            aaref=[]
+            aaalts=[]
+            for gffId in self.variants.variants[variantId]["aaRef"]:
+                aaref.append(self.variants.variants[variantId]["aaRef"][gffId]+" ("+gffId+")")
+                aaalts.append(self.variants.variants[variantId]["aaAlts"][gffId][altIndex])
+            
+            if len(self.variants.variants[variantId]["aaRef"]) > 0: #There is a feature at least
+                content[5]=":".join(aaref) #the same aa ref in different features
+                content[6]=":".join(aaalts) #different aa alt
+            annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in self.variants.variants[variantId]["features"] if self.annotations.annotations[geneId]['annotation']=="gene")
+            content[7]=":".join(annotations) if annotations!=set() else content[7] #potentially different annotations
+            groups={0:[], 1:[], 2:[], 3:[]}
+            for i, sample in enumerate(self.variants.samples):#samples alt ratios
+                content[9+i]=str(self.variants.variants[variantId]["ratios"][sample][altIndex+1])
+                groupNumber=self.variants.variants[variantId]["groups"][sample][altIndex+1]
+                groups[groupNumber].append(sample)
+            for i in groups:
+                content[9+len(self.variants.samples)+i]=":".join(groups[i])
+            line=sep.join(content)+"\n"
+        return line
+
+    def load_features(self, variantId, gffId):
+        """
+        Store amino acids obtained from CDS translations of a CDS feature
+
+        variantId (str) : Unique identifier of the variant
+        gffId (str) : Unique identifier of the CDS feature to translate
+
+        """
+        self.variants.variants[variantId]["aaAlts"][gffId]=[]
+        for alt in self.variants.variants[variantId]["alts"]:
+            aaDiff=self.get_aa_from_mutation(self.variants.variants[variantId]["chromosome"], 
+            self.variants.variants[variantId]["position"], 
+            self.variants.variants[variantId]["ref"], alt, gffId)
+            self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[1])
+        self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[0]
+
+    def get_all_alts(self, fixed, allVariants, allRegions, show, csv):
         """
         Retrieve and merge information about the variants filtered
 
@@ -119,61 +183,24 @@ class Connection(object):
         code=-math.inf if allVariants is True else code
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         #Headers
-        printedLine="Chromosome; Position; Type; Ref; Alt; AAref; AAalt; Annotation; Score;"
-        printedLine+=";".join(self.variants.samples)+"\n"
+        printedLine=self.print_line()
         #Body
         for key in sortedKeys:
-            #Filter
             if not any(score > code for score in self.variants.variants[key]["scores"]):
-                continue
-            chrom=key.split(":")[0]
-            pos=int(key.split(":")[1].split(".")[0])
-            gffIds=self.map_GFFid_VCFpos(chrom, pos)
-            #No feature-surrounded variants
-            if len(gffIds)==0 and allRegions is False:
-                continue
-            for gffId in gffIds:
-                #No CDS feature
+                continue #Do not do anything if everyone is garbage
+            gffIds=self.map_GFFid_VCFpos(self.variants.variants[key]["chromosome"], self.variants.variants[key]["position"])
+            self.variants.variants[key]["features"]=gffIds
+            if len(self.variants.variants[key]["features"])==0 and allRegions is False:
+                continue #No feature-surrounded variants
+            for gffId in self.variants.variants[key]["features"]:
                 if self.annotations.annotations[gffId]['annotation']!='CDS':
-                    continue
-                self.variants.variants[key]["aaAlts"][gffId]=[]
-                for alt in self.variants.variants[key]["alts"]:
-                    aaDiff=self.get_aa_from_mutation(chrom, pos, self.variants.variants[key]["ref"], alt, gffId)
-                    self.variants.variants[key]["aaAlts"][gffId].append(aaDiff[1])
-                self.variants.variants[key]["aaRef"][gffId]=aaDiff[0]
+                    continue #Not a CDS feature
+                self.load_features(key, gffId)
             #Each alt has its line
             for altIndex, alt in enumerate(self.variants.variants[key]["alts"]):
                 if self.variants.variants[key]["scores"][altIndex] <= code:
-                    continue
-                #Chromosome
-                printedLine+=key.split(":")[0]+";"
-                #Position
-                printedLine+=key.split(":")[1]+";"
-                #Type
-                printedLine+=self.variants.variants[key]["category"]+";"
-                #Ref base
-                printedLine+=self.variants.variants[key]["ref"]+";"
-                #Alt base
-                printedLine+=alt+";"
-                #feature-surrounded variant
-                if len(gffIds) > 0:
-                    #Ref AA
-                    printedLine+=":".join([self.variants.variants[key]["aaRef"][gffId]+" ("+gffId+")" for gffId in self.variants.variants[key]["aaRef"]])+";"
-                    #Alt AA per CDS feature
-                    printedLine+=":".join([self.variants.variants[key]["aaAlts"][gffId][altIndex] for gffId in self.variants.variants[key]["aaAlts"]])+";"
-                    #Unique annotations found
-                    printedLine+=":".join(set(self.annotations.annotations[gffId]['description']+" ("+gffId+")" for gffId in gffIds if self.annotations.annotations[gffId]['annotation']=="gene"))+";"
-                #No feature-surrounded variant
-                else:
-                    printedLine+="NA;"
-                    printedLine+="NA;"
-                    printedLine+="NA;"
-                #Scores
-                printedLine+=str(self.variants.variants[key]["scores"][altIndex])+";"
-                #Sample alt ratios
-                for sampIndex,sample in enumerate(self.variants.variants[key]["ratios"]):
-                    printedLine+=str(self.variants.variants[key]["ratios"][sample][altIndex+1])
-                    printedLine+=";" if sampIndex < len(self.variants.variants[key]["ratios"])-1 else "\n"
+                    continue #The score is not good enough
+                printedLine+=self.print_line(key, altIndex)
         if show is True:
             print(printedLine)
         with open(csv, 'w') as f:
