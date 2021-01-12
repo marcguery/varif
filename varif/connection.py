@@ -24,7 +24,7 @@ class Connection(object):
         self.get_all_alts(
             fixed=Config.options["fixed"], allVariants=Config.options["allVariants"],
             allRegions=Config.options["allRegions"], show=Config.options["show"],
-            csv=Config.options["csv"])
+            csv=Config.options["csv"], filteredvcf=Config.options["filteredvcf"])
     
     def map_GFFid_VCFpos(self, chromosome, position):
         """
@@ -151,23 +151,25 @@ class Connection(object):
             line=sep.join(content)+"\n"
         return line
 
-    def load_features(self, variantId, gffId):
+    def load_features(self, variantId):
         """
-        Store amino acids obtained from CDS translations of a CDS feature
+        Store amino acids obtained from CDS translations
 
         variantId (str) : Unique identifier of the variant
-        gffId (str) : Unique identifier of the CDS feature to translate
 
         """
-        self.variants.variants[variantId]["aaAlts"][gffId]=[]
-        for alt in self.variants.variants[variantId]["alts"]:
-            aaDiff=self.get_aa_from_mutation(self.variants.variants[variantId]["chromosome"], 
-            self.variants.variants[variantId]["position"], 
-            self.variants.variants[variantId]["ref"], alt, gffId)
-            self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[1])
-        self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[0]
+        for gffId in self.variants.variants[variantId]["features"]:
+            if self.annotations.annotations[gffId]['annotation']!='CDS':
+                continue #Not a CDS feature
+            self.variants.variants[variantId]["aaAlts"][gffId]=[]
+            for alt in self.variants.variants[variantId]["alts"]:
+                aaDiff=self.get_aa_from_mutation(self.variants.variants[variantId]["chromosome"], 
+                self.variants.variants[variantId]["position"], 
+                self.variants.variants[variantId]["ref"], alt, gffId)
+                self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[1])
+            self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[0]
 
-    def get_all_alts(self, fixed, allVariants, allRegions, show, csv):
+    def get_all_alts(self, fixed, allVariants, allRegions, show, csv, filteredvcf):
         """
         Retrieve and merge information about the variants filtered
 
@@ -176,6 +178,8 @@ class Connection(object):
         allRegions (bool) : Show not only CDS if True
         show (bool) : Print in stdout
         csv (str) : File path of the CSV (semicolon separated)
+        filteredvcf (str) : File path of the filtered VCF
+
 
         """
         #Filter by score to know what to show
@@ -184,6 +188,8 @@ class Connection(object):
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         #Headers
         printedLine=self.print_line()
+        filteredvcfcontent="".join(self.variants.vcffile[0:self.variants.headerlinenumber])
+        vcfcorrespondingline=self.variants.headerlinenumber-1
         #Body
         for key in sortedKeys:
             if not any(score > code for score in self.variants.variants[key]["scores"]):
@@ -192,16 +198,21 @@ class Connection(object):
             self.variants.variants[key]["features"]=gffIds
             if len(self.variants.variants[key]["features"])==0 and allRegions is False:
                 continue #No feature-surrounded variants
-            for gffId in self.variants.variants[key]["features"]:
-                if self.annotations.annotations[gffId]['annotation']!='CDS':
-                    continue #Not a CDS feature
-                self.load_features(key, gffId)
+            self.load_features(key)
             #Each alt has its line
             for altIndex, alt in enumerate(self.variants.variants[key]["alts"]):
                 if self.variants.variants[key]["scores"][altIndex] <= code:
                     continue #The score is not good enough
                 printedLine+=self.print_line(key, altIndex)
+                if self.variants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
+                    vcfcorrespondingline=self.variants.variants[key]["vcfline"]
+                    filteredvcfcontent+=self.variants.vcffile[vcfcorrespondingline-1]
         if show is True:
-            print(printedLine)
-        with open(csv, 'w') as f:
-            f.write(printedLine)
+            print(filteredvcfcontent.strip("\n"))
+        if csv is not None:
+            with open(csv, 'w') as f:
+                f.write(printedLine)
+        if filteredvcf is not None:
+            with open(filteredvcf, 'w') as f:
+                f.write(filteredvcfcontent)
+

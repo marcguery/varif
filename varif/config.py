@@ -39,7 +39,7 @@ class Config(object):
         help='Add variants only in gene-annotated regions')
 
         parser.add_argument('--show', dest='show', action='store_true',
-        help='Print result to stdout')
+        help='Print filtered VCF to stdout')
         parser.add_argument('--no-show', dest='show', action='store_false',
         help='Do not print any result')
 
@@ -53,8 +53,11 @@ class Config(object):
         metavar="RATIO",
         help='Maximal ratio of alt/total depth to call it true ref')
 
-        parser.add_argument('--csv', dest='csv', type=str, default="Variants.csv",
+        parser.add_argument('--csv', dest='csv', type=str, default=None,
         help='Name of the CSV file to be written')
+
+        parser.add_argument('--filteredvcf', dest='filteredvcf', type=str, default=None,
+        help='Name of the VCF file to be written')
 
         parser.add_argument('--max-score', dest='maximum', type=int, default=99999,
         metavar="SCORE",

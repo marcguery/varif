@@ -8,6 +8,8 @@ class Variants(object):
         variants (dict) : Key (ID of the variant), value (Info on the variant)
         vcfHeaderExpected (list) : Order expected of the fields in the VCF
         vcfHeaderSorted (dict) : Key (Name of field), value (order of field)
+        vcffile (list) : The list of lines in the input VCF file
+        headerlinenumber : The line number of the VCF file corresponding to the end of the header
         samples (list) : Name of samples
         ranks (list) : Rank of each field in VCF
 
@@ -18,6 +20,8 @@ class Variants(object):
             "REF", "ALT", "QUAL", "FILTER",
             "INFO", "FORMAT"]
         self.vcfHeaderSorted={colname:i for i,colname in enumerate(self.vcfHeaderExpected)}
+        self.vcffile=[]
+        self.headerlinenumber=1
         self.samples=[]
         self.config=Config
 
@@ -63,25 +67,27 @@ class Variants(object):
         vcf (str) : File path of VCF file
 
         """
-        vcffile=open(vcf, 'r').readlines()
+        self.vcffile=open(vcf, 'r').readlines()
         n=0
-        line=vcffile[n]
+        line=self.vcffile[n]
         #Getting rid of the header
-        while line.startswith('##') and n < len(vcffile):
-            line=vcffile[n]
+        while line.startswith('##') and n < len(self.vcffile):
+            line=self.vcffile[n]
             n+=1
-        headerline=vcffile[n-1]
+        self.headerlinenumber=n
+        headerline=self.vcffile[self.headerlinenumber-1]
         #Check VCF formatting
         self.check_vcf_header(headerline.split("\t"))
         samplesRanks=[self.vcfHeaderSorted[sample] for sample in self.samples]
         #Storing variants
-        while n < len(vcffile):            
-            variant=Variant(vcffile[n], self.ranks, self.samples, samplesRanks)
+        while n < len(self.vcffile):
+            variant=Variant(self.vcffile[n], self.ranks, self.samples, samplesRanks)
             variant.calculate_ratios(self.config.options["mindepth"])
             variant.scores_from_ratios()
 
             #Generate unique ID for each variant
             identifier=variant.chromosome+":"+variant.position
+            vcfline=n+1
             #For same Chromosome/position variants 
             # which are on same line or on different lines
             num=0
@@ -94,5 +100,6 @@ class Variants(object):
                 "ref":variant.ref, "alts":variant.alts, 
                 "ratios":variant.ratios, "groups":variant.groups,
                 "features":[],
-                "aaRef":{}, "aaAlts":{}}
+                "aaRef":{}, "aaAlts":{},
+                "vcfline":vcfline}
             n+=1

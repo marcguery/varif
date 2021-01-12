@@ -45,7 +45,9 @@ For each variant in each sample, `varif` will calculate the proportion of altern
 Then, it will calculate a score based on the ratio of the proportion of alternate reads of the most variant sample above that of the less variant sample. This score will be then modified considering chosen values of ratio to call a variant true positive or true negative (see [Cut-off proportions](#cut\\-off-proportions)).
 As a result, the highest scores will be associated with sites likely to be differentially distributed among samples.
 
-## Output
+# Output
+
+## Scores
 
 These scores will be saved in a CSV file whose headers are:
 
@@ -65,6 +67,12 @@ These scores will be saved in a CSV file whose headers are:
 - Mut: Sample having the alternate sequence
 - Mix: Samples having a mixture of sequences
 - Und: Samples having not enough depth at this position
+
+Do not specify the option `--csv` if you don't want this file to be created.
+
+## VCF
+
+Variants passing the filters mentioned below will be sent to the standard output with the option`--show` and/or to a file if the option `--filteredvcf` is given a value.
 
 # Filters
 
