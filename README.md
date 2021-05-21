@@ -20,7 +20,7 @@ A VCF file formatted as described in `samtools` specifications at [https://samto
 
 Mandatory metadata headers are:
 
--  #CHROM
+- #CHROM
 - POS
 - ID
 - REF

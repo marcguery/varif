@@ -63,7 +63,7 @@ class Fasta(object):
         cds=cds[::-1]
         newcds=""
         for i in range(len(cds)):
-            newcds+=self.dnareverse[cds[i]]
+            newcds+=self.dnareverse[cds[i]] if cds[i] in self.dnareverse else '?'
         return newcds
 
     def translate_CDS(self, cds, strand, phase):
@@ -82,7 +82,7 @@ class Fasta(object):
         i=phase
         n=len(cds)
         while i <= n-3 and aminoacid != "_":
-            aminoacid=self.dnatable[cds[i:i+3]]
+            aminoacid=self.dnatable[cds[i:i+3]] if cds[i:i+3] in self.dnatable else '?'
             protein+=aminoacid
             i+=3
         return protein
