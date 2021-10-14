@@ -87,6 +87,7 @@ class Connection(object):
         endCDS=self.annotations.annotations[gffId]['end']
         startIndex=position-1
         endIndex=startIndex+len(reference)
+        window=2
         #The number of bases to skip
         # knowing that the window is +2 -2 bases after mutation
         #Translation starts at start of feature
@@ -95,10 +96,11 @@ class Connection(object):
         #Translation starts at end of feature
         elif strand=="-":
             phase=(endIndex+2-phase-endCDS)%3
-        oldCDS=self.fasta.data[chromosome][startIndex-2:endIndex+2]
+        
+        oldCDS=self.fasta.data[chromosome][startIndex-window:endIndex+window]
         oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
 
-        newCDS=self.fasta.data[chromosome][startIndex-2:startIndex]+mutation+self.fasta.data[chromosome][endIndex:endIndex+2]
+        newCDS=self.fasta.data[chromosome][startIndex-window:startIndex]+mutation+self.fasta.data[chromosome][endIndex:endIndex+window]
         newProt=self.fasta.translate_CDS(newCDS, strand, phase)
         aaChanges=[oldProt, newProt]
         return aaChanges
@@ -139,7 +141,7 @@ class Connection(object):
             if len(self.variants.variants[variantId]["aaRef"]) > 0: #There is a feature at least
                 content[5]=":".join(aaref) #the same aa ref in different features
                 content[6]=":".join(aaalts) #different aa alt
-            annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in self.variants.variants[variantId]["features"] if self.annotations.annotations[geneId]['annotation']=="gene")
+            annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in self.variants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
             content[7]=":".join(annotations) if annotations!=set() else content[7] #potentially different annotations
             groups={0:[], 1:[], 2:[], 3:[]}
             for i, sample in enumerate(self.variants.samples):#samples alt ratios

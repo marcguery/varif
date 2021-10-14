@@ -51,28 +51,28 @@ class Annotations(object):
         """
         gfffile=open(gff, 'r').readlines()
         n=0
-        line=gfffile[n]
         #Header
-        while line.startswith('##') and n < len(gfffile):
-            line=gfffile[n]
+        while n < len(gfffile) and gfffile[n].startswith('##'):
             n+=1
-        annotationWithoutDesc=[]
-        while n < len(gfffile):            
+        while n < len(gfffile):
             annotation=Annotation(gfffile[n], self.ranks)
-            if annotation.id in self.annotations:
-                print("There is a duplicate in the GFF file, ID : %s"%annotation.id)
-                raise(Exception)
+            duplicatedidnumber=1
+            newannotation=annotation.id
+            while newannotation in self.annotations and duplicatedidnumber < 100:
+                print("There is a duplicate in the GFF file, ID: %s"%newannotation)
+                print("Automatically assigning a new ID...")
+                newannotation=annotation.id+".dupl."+str(duplicatedidnumber)
+                duplicatedidnumber+=1
+            annotation.id=newannotation
             #Filling descriptions with those of parents
-            if annotation.description is None:
+            if annotation.parents!=[]:
                 descs=[]
                 for parent in annotation.parents:
                     if parent in self.annotations:
                         descs.append(self.annotations[parent]['description'])
                     else:
-                        descs=[]
-                        print(annotation.parents)
-                        annotationWithoutDesc.append(annotation.id)
-                        break
+                        print("Orphan entry (%s) in the GFF file missing parent (%s)"%(annotation.id, parent))
+                        raise(Exception)
                 annotation.description=",".join(descs)
             #Storing annotations
             self.annotations[annotation.id]={
@@ -91,7 +91,5 @@ class Annotations(object):
             else:
                 self.positions[annotation.chromosome]=[[int(annotation.start), int(annotation.end), annotation.id]]
             n+=1
-        if len(annotationWithoutDesc) > 0:
-            print("There were unresolved descriptions : \n%s"%", ".join(annotationWithoutDesc))
         #Feature coordinates need to be sorted by start then end for variant mapping
         self.index=self.index_gff()
