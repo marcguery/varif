@@ -100,6 +100,7 @@ class Variants(object):
                 "ref":variant.ref, "alts":variant.alts, 
                 "ratios":variant.ratios, "groups":variant.groups,
                 "features":[],
+                "cdsRef":{}, "cdsAlts":{},
                 "aaRef":{}, "aaAlts":{},
                 "vcfline":vcfline}
             n+=1

@@ -81,28 +81,35 @@ class Connection(object):
         return (list) : Aminoacids before and after mutation
         """
         assert self.annotations.annotations[gffId]['annotation']=='CDS'
+        assert Config.options["windowBefore"] >= 2 and Config.options["windowAfter"] >= 2
         phase=int(self.annotations.annotations[gffId]['phase'])
         strand=self.annotations.annotations[gffId]['strand']
         startCDS=self.annotations.annotations[gffId]['start']
         endCDS=self.annotations.annotations[gffId]['end']
         startIndex=position-1
         endIndex=startIndex+len(reference)
-        window=2
+        windowBefore=Config.options["windowBefore"]
+        windowAfter=Config.options["windowAfter"]
+
         #The number of bases to skip
-        # knowing that the window is +2 -2 bases after mutation
+        # knowing that the window is +/- windows bases after mutation
         #Translation starts at start of feature
         if strand=="+":
-            phase=-(startIndex-2-(startCDS-1+phase))%3
+            shiftBefore=min(startIndex-startCDS+1, windowBefore)
+            shiftAfter=min(endCDS-endIndex, windowAfter)
+            phase=-(startIndex-shiftBefore-(startCDS-1+phase))%3
         #Translation starts at end of feature
         elif strand=="-":
-            phase=(endIndex+2-phase-endCDS)%3
+            shiftBefore=min(startIndex-startCDS+1, windowAfter)
+            shiftAfter=min(endCDS-endIndex, windowBefore)
+            phase=(endIndex+shiftAfter-phase-endCDS)%3
         
-        oldCDS=self.fasta.data[chromosome][startIndex-window:endIndex+window]
+        oldCDS=self.fasta.data[chromosome][startIndex-shiftBefore:endIndex+shiftAfter]
         oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
 
-        newCDS=self.fasta.data[chromosome][startIndex-window:startIndex]+mutation+self.fasta.data[chromosome][endIndex:endIndex+window]
+        newCDS=self.fasta.data[chromosome][startIndex-shiftBefore:startIndex]+mutation+self.fasta.data[chromosome][endIndex:endIndex+shiftAfter]
         newProt=self.fasta.translate_CDS(newCDS, strand, phase)
-        aaChanges=[oldProt, newProt]
+        aaChanges=[oldCDS, oldProt, newCDS, newProt]
         return aaChanges
 
     def print_line(self, variantId=None, altIndex=0, sep=";"):
@@ -119,7 +126,7 @@ class Connection(object):
         if variantId is None:
             baseHeader=[
                 "Chromosome", "Position", "Type",
-                "Ref", "Alt", "AAref", "AAalt",
+                "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
                 "Annotation","Score"]
             line=sep.join(baseHeader+self.variants.samples+["Con", "Mut", "Mix", "Und"])+"\n"
         else:
@@ -127,29 +134,35 @@ class Connection(object):
                 self.variants.variants[variantId]["chromosome"], str(self.variants.variants[variantId]["position"]), 
                 self.variants.variants[variantId]["category"],
                 self.variants.variants[variantId]["ref"], self.variants.variants[variantId]["alts"][altIndex],
-                "NA", "NA", "NA",
+                "NA", "NA", "NA","NA", "NA",
                 str(self.variants.variants[variantId]["scores"][altIndex])]
             content+=["NA"]*len(self.variants.samples)
             content+=["NA", "NA", "NA", "NA"]
 
+            cdsref=[]
             aaref=[]
+            cdsalts=[]
             aaalts=[]
-            for gffId in self.variants.variants[variantId]["aaRef"]:
-                aaref.append(self.variants.variants[variantId]["aaRef"][gffId]+" ("+gffId+")")
+            for gffId in self.variants.variants[variantId]["cdsRef"]:
+                cdsref.append(self.variants.variants[variantId]["cdsRef"][gffId]+" ("+gffId+")")
+                aaref.append(self.variants.variants[variantId]["aaRef"][gffId])
+                cdsalts.append(self.variants.variants[variantId]["cdsAlts"][gffId][altIndex])
                 aaalts.append(self.variants.variants[variantId]["aaAlts"][gffId][altIndex])
             
-            if len(self.variants.variants[variantId]["aaRef"]) > 0: #There is a feature at least
-                content[5]=":".join(aaref) #the same aa ref in different features
-                content[6]=":".join(aaalts) #different aa alt
+            if len(self.variants.variants[variantId]["cdsRef"]) > 0: #There is a feature at least
+                content[5]=":".join(cdsref) #the same cds ref in different features
+                content[6]=":".join(cdsalts) #different cds alt
+                content[7]=":".join(aaref) #the same aa ref in different features
+                content[8]=":".join(aaalts) #different aa alt
             annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in self.variants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
-            content[7]=":".join(annotations) if annotations!=set() else content[7] #potentially different annotations
+            content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
             groups={0:[], 1:[], 2:[], 3:[]}
             for i, sample in enumerate(self.variants.samples):#samples alt ratios
-                content[9+i]=str(self.variants.variants[variantId]["ratios"][sample][altIndex+1])
+                content[11+i]=str(self.variants.variants[variantId]["ratios"][sample][altIndex+1])
                 groupNumber=self.variants.variants[variantId]["groups"][sample][altIndex+1]
                 groups[groupNumber].append(sample)
             for i in groups:
-                content[9+len(self.variants.samples)+i]=":".join(groups[i])
+                content[11+len(self.variants.samples)+i]=":".join(groups[i])
             line=sep.join(content)+"\n"
         return line
 
@@ -164,12 +177,15 @@ class Connection(object):
             if self.annotations.annotations[gffId]['annotation']!='CDS':
                 continue #Not a CDS feature
             self.variants.variants[variantId]["aaAlts"][gffId]=[]
+            self.variants.variants[variantId]["cdsAlts"][gffId]=[]
             for alt in self.variants.variants[variantId]["alts"]:
                 aaDiff=self.get_aa_from_mutation(self.variants.variants[variantId]["chromosome"], 
                 self.variants.variants[variantId]["position"], 
                 self.variants.variants[variantId]["ref"], alt, gffId)
-                self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[1])
-            self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[0]
+                self.variants.variants[variantId]["cdsAlts"][gffId].append(aaDiff[2])
+                self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[3])
+            self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[1]
+            self.variants.variants[variantId]["cdsRef"][gffId]=aaDiff[0]
 
     def get_all_alts(self, fixed, allVariants, allRegions, show, csv, filteredvcf):
         """

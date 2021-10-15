@@ -38,6 +38,15 @@ class Config(object):
         parser.add_argument('--gene-regions', dest='allRegions', action='store_false',
         help='Add variants only in gene-annotated regions')
 
+
+        parser.add_argument('--window-before', dest='windowBefore', type=int, default=2,
+        metavar="INT",
+        help='Number of bases before the variant to be included')
+        parser.add_argument('--window-after', dest='windowAfter', type=int, default=2,
+        metavar="INT",
+        help='Number of bases before the variant to be included')
+        
+
         parser.add_argument('--show', dest='show', action='store_true',
         help='Print filtered VCF to stdout')
         parser.add_argument('--no-show', dest='show', action='store_false',
@@ -54,9 +63,10 @@ class Config(object):
         help='Maximal ratio of alt/total depth to call it true ref')
 
         parser.add_argument('--csv', dest='csv', type=str, default=None,
+        metavar="FILE",
         help='Name of the CSV file to be written')
-
         parser.add_argument('--filteredvcf', dest='filteredvcf', type=str, default=None,
+        metavar="FILE",
         help='Name of the VCF file to be written')
 
         parser.add_argument('--max-score', dest='maximum', type=int, default=99999,

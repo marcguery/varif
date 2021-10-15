@@ -33,6 +33,13 @@ Mandatory metadata headers are:
 
 A GFF3 file formatted as described in `ensembl` specifications at [https://www.ensembl.org/info/website/upload/gff3.html](https://www.ensembl.org/info/website/upload/gff3.html).
 
+Supported types of features are:
+
+- *gene* or containing the keyword 'gene' (*ncRNA_gene*, *protein_coding_gene*, *pseudogene*, ...)
+  **Used to annotate the variants**
+- *CDS*
+  **Used to translate sequences affected by the variants**
+
 ## FASTA
 
 The FASTA file containing one sequence per chromosome.
@@ -56,8 +63,10 @@ These scores will be saved in a CSV file whose headers are:
 - Type: The type of variant (SNP, INDEL...)
 - Ref: The reference sequence
 - Alt: The alternate sequence
-- AAref: The amino acid resulting from the reference sequence followed by the CDS identifier
-- AAalt: The amino acid resulting from the alternate sequence
+- CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier
+- CDSalt: The windowed CDS alternate sequences including the variant
+- AAref: The amino acid sequence resulting from the windowed reference sequence
+- AAalt: The amino acid sequence resulting from the windowed alternate sequences
 - Annotation: The annotation described in the GFF file followed by the gene identifier
 - Score: The score of the variant (see [Process](#process))
 - Sample#1: Proportion of alternate allele for sample 1
@@ -107,14 +116,16 @@ Variants can also be filtered by their score; you can show all variants whose sc
 
 ## Annotation
 
-Variant inside genes are annotated given the gene annotation available in the GFF file. 
+Variant inside genes are annotated given the gene annotation available in the GFF file. Several gene annotations are separated by a ':', as well as the associated CDS and amino acid sequences when the variant is inside a CDS.
 
 Variants outside genes will have a *NA* instead.
 
 ## Automatic translation
 
-When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the variant.
-Note that this prediction could not be reliable when:
+When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant and bases before and after that are included in a chosen window.
+Windows in bases before the and after the whole variant (in the direction of the translation) have to be both greater than 1 in order to output at least one amino acid.
+The translation will stop if:
 
-- The start of the variant is located 2 bases or less before the end of the CDS
-- The end of the variant is located 2 bases or less before the end of the CDS or is longer than it
+- The window is completeley translated
+- The end of the CDS is reached
+- A stop codon is obtained
