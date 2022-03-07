@@ -87,8 +87,7 @@ Variants passing the filters mentioned below will be sent to the standard output
 
 ## Minimal depth
 
-The depth below which all the read counts of the corresponding sample are set to null.
-For all these samples, proportions are NA values.
+The variant allele frequencies are calculated only if the sample read depth (the sum of all the reads REF and ALT) is equal or superior to this value.
 
 ## Cut-off proportions
 

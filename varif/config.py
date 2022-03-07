@@ -44,7 +44,7 @@ class Config(object):
         help='Number of bases before the variant to be included')
         parser.add_argument('--window-after', dest='windowAfter', type=int, default=2,
         metavar="INT",
-        help='Number of bases before the variant to be included')
+        help='Number of bases after the variant to be included')
         
 
         parser.add_argument('--show', dest='show', action='store_true',
@@ -62,12 +62,12 @@ class Config(object):
         metavar="RATIO",
         help='Maximal ratio of alt/total depth to call it true ref')
 
-        parser.add_argument('--csv', dest='csv', type=str, default=None,
+        parser.add_argument('--filtered-csv', dest='csv', type=str, default=None,
         metavar="FILE",
-        help='Name of the CSV file to be written')
-        parser.add_argument('--filteredvcf', dest='filteredvcf', type=str, default=None,
+        help='Name of the output CSV file')
+        parser.add_argument('--filtered-vcf', dest='filteredvcf', type=str, default=None,
         metavar="FILE",
-        help='Name of the VCF file to be written')
+        help='Name of the output VCF file')
 
         parser.add_argument('--max-score', dest='maximum', type=int, default=99999,
         metavar="SCORE",

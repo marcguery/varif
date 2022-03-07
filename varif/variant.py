@@ -73,7 +73,7 @@ class Variant(object):
         """
         #Handling division by zero, when there is no ref
         for sample in self.counts:
-            if sum(self.counts[sample]) <= mindepth:
+            if sum(self.counts[sample]) < mindepth:
                 self.ratios[sample]=[math.nan]*len(self.counts[sample])
             else:
                 self.ratios[sample]=[round(ad/sum(self.counts[sample]), 2) for ad in self.counts[sample]]
