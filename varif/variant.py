@@ -65,12 +65,18 @@ class Variant(object):
         """
         Get the ratio for each alternate count of the variant
 
-        mindepth (int) : Minmal depth for a sample to consider its counts
-        To show every variant later, mindepth must be 0
+        mindepth (int) : Minmal number of reads (REF+ALTs) to
+        calculate allele frequencies, must be integer >= 1
 
         return (dict) : Ratios for each ref and alts
 
         """
+        try:
+            mindepth=int(mindepth)
+        except ValueError:
+            raise ValueError("Argument 'mindepth' should be an integer, not '%s'"%mindepth)
+        if mindepth < 1:
+            raise ValueError("Depth should be above 0")
         #Handling division by zero, when there is no ref
         for sample in self.counts:
             if sum(self.counts[sample]) < mindepth:
