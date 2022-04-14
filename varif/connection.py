@@ -15,6 +15,7 @@ class Connection(object):
         fasta (Fasta) : Fasta object
         """
         Config.set_options()
+        self.check_arguments(Config.options)
         self.variants=Variants()
         self.variants.load_variants_from_VCF(Config.options['vcf'])
         self.annotations=Annotations()
@@ -25,6 +26,18 @@ class Connection(object):
             fixed=Config.options["fixed"], allVariants=Config.options["allVariants"],
             allRegions=Config.options["allRegions"], show=Config.options["show"],
             csv=Config.options["csv"], filteredvcf=Config.options["filteredvcf"])
+    
+    @property
+    def version(self):
+        return "0.1.4"
+    
+    def check_arguments(self, arguments):
+        if Config.options["version"]:
+            print(self.version)
+            raise SystemExit
+        for arg in ["vcf", "gff", "fasta"]:
+            if arguments[arg] is None:
+                raise NameError("Argument '%s' is required"%arg)
     
     def map_GFFid_VCFpos(self, chromosome, position):
         """
@@ -81,7 +94,10 @@ class Connection(object):
         return (list) : Aminoacids before and after mutation
         """
         assert self.annotations.annotations[gffId]['annotation']=='CDS'
-        assert Config.options["windowBefore"] >= 2 and Config.options["windowAfter"] >= 2
+        try:
+            assert Config.options["windowBefore"] >= 2 and Config.options["windowAfter"] >= 2
+        except AssertionError:
+            raise ValueError("Windows before (input:%s) and after (input:%s) should be above 2"%(Config.options["windowBefore"], Config.options["windowAfter"]))
         phase=int(self.annotations.annotations[gffId]['phase'])
         strand=self.annotations.annotations[gffId]['strand']
         startCDS=self.annotations.annotations[gffId]['start']

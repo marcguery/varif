@@ -53,9 +53,9 @@ class Variant(object):
 
     def make_groups(self, sample):
         for i, ratio in enumerate(self.ratios[sample]):
-            if ratio < self.config.options["maxprop"]:
+            if ratio < self.config.options["maxraf"]:
                 self.groups[sample][i]=0
-            elif ratio > self.config.options["minprop"]:
+            elif ratio > self.config.options["minaaf"]:
                 self.groups[sample][i]=1
             else:
                 self.groups[sample][i]=2
@@ -95,12 +95,19 @@ class Variant(object):
         """
         assert self.ratios != {}
         #Value below which a ratio is not considered a True alt
-        minprop=self.config.options["minprop"]
+        minaaf=self.config.options["minaaf"]
         #Value above which a ratio is not considered a True ref
-        maxprop=self.config.options["maxprop"]
-        minprop=1-maxprop if minprop is None else minprop
+        maxraf=self.config.options["maxraf"]
+        minaaf=1-maxraf if minaaf is None else minaaf
 
-        assert 0 < maxprop < 0.5 and 0.5 < minprop < 1
+        try:
+            assert 0 <= maxraf <= 1 and 0 <= minaaf <= 1
+            assert maxraf <= minaaf
+        except AssertionError:
+            err="Alternate AF (input:%s) and Reference AF (input:%s)"%(minaaf, maxraf)
+            err+=" should be between 0 and 1"
+            err+=" and Reference AF should be <= to Alternate AF."
+            raise ValueError(err)
         for rank in range(1,len(self.alts)+1):
             ratioRank=[self.ratios[sample][rank] for sample in self.ratios]
             #No sample is above depth
@@ -110,12 +117,12 @@ class Variant(object):
             minratio=np.nanmin(ratioRank)
             maxratio=np.nanmax(ratioRank)
             #fixedVariants
-            if minratio > minprop:
+            if minratio >= minaaf:
                 self.scores.append(0)
             #Ambiguous variants
-            elif minratio >= maxprop or maxratio <= minprop:
+            elif minratio > maxraf or maxratio < minaaf:
                 self.scores.append(round(-maxratio/minratio, 2) if minratio != 0 else self.minimum)
             #True Variants
-            elif minratio < maxprop and maxratio > minprop:
+            elif minratio <= maxraf and maxratio >= minaaf:
                 self.scores.append(round(maxratio/minratio, 2) if minratio != 0 else self.maximum)
         return self.scores

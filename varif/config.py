@@ -11,15 +11,15 @@ class Config(object):
             differentially expressed (or fixed) among your sample(s)
             wih varif.
             ''')
-        parser.add_argument('-vcf', required=True, type=str,
+        parser.add_argument('-vcf', type=str, default=None,
         metavar="FILE",
         help='VCF file')
 
-        parser.add_argument('-gff', required=True, type=str,
+        parser.add_argument('-gff', type=str, default=None,
         metavar="FILE",
         help='GFF3 file')
 
-        parser.add_argument('-fasta', required=True, type=str,
+        parser.add_argument('-fasta', type=str, default=None,
         metavar="FILE",
         help='FASTA file')
 
@@ -55,11 +55,11 @@ class Config(object):
         parser.add_argument('--depth', dest='mindepth', type=int, default=5,
         metavar="DEPTH",
         help='Minmal total read depth for a alt to be considered')
-        parser.add_argument('--ratio-alt', dest='minprop', type=float, default=0.8,
-        metavar="RATIO",
+        parser.add_argument('--ratio-alt', dest='minaaf', type=float, default=0.8,
+        metavar="AAF",
         help='Minmal ratio of alt/total depth to call it true alt')
-        parser.add_argument('--ratio-no-alt', dest='maxprop', type=float, default=0.2,
-        metavar="RATIO",
+        parser.add_argument('--ratio-no-alt', dest='maxraf', type=float, default=0.2,
+        metavar="RAF",
         help='Maximal ratio of alt/total depth to call it true ref')
 
         parser.add_argument('--filtered-csv', dest='csv', type=str, default=None,
@@ -75,5 +75,8 @@ class Config(object):
         parser.add_argument('--min-score', dest='minimum', type=int, default=-99999,
         metavar="SCORE",
         help='Minimal score attributed to negative-score variants')
+
+        parser.add_argument('--version', dest='version', action='store_true',
+        help='Show varif version')
         args=parser.parse_args()
         Config.options=vars(args)

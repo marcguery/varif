@@ -1,20 +1,30 @@
 # varif
 A filtering and annotating program for VCF-formatted variants.
 
-# Download and installation
+# Installation and upgrade
 
 ```bash
 git clone https://github.com/marcguery/varif.git
 cd varif
 pip3 install .
 varif -h
+varif --version
+```
+
+Or without using `pip`:
+
+```bash
+git clone https://github.com/marcguery/varif.git
+export PYTHONPATH=$(pwd -P)/varif:$PYTHONPATH
+./varif/bin/varif -h
+./varif/bin/varif --version
 ```
 
 # Inputs
 
 All input files must have the same chromosome names.
 
-## VCF
+## VCF (`-vcf`)
 
 A VCF file formatted as described in `samtools` specifications at [https://samtools.github.io/hts-specs/VCFv4.2.pdf](https://samtools.github.io/hts-specs/VCFv4.2.pdf).
 
@@ -29,7 +39,7 @@ Mandatory metadata headers are:
 - FILTER
 - INFO
 
-## GFF
+## GFF (`-gff`)
 
 A GFF3 file formatted as described in `ensembl` specifications at [https://www.ensembl.org/info/website/upload/gff3.html](https://www.ensembl.org/info/website/upload/gff3.html).
 
@@ -40,7 +50,7 @@ Supported types of features are:
 - *CDS*
   **Used to translate sequences affected by the variants**
 
-## FASTA
+## FASTA (`-fasta`)
 
 The FASTA file containing one sequence per chromosome.
 
@@ -48,83 +58,129 @@ The FASTA file containing one sequence per chromosome.
 
 Use `varif` to filter and rank variants submitted through a VCF file.
 
-For each variant in each sample, `varif` will calculate the proportion of alternate reads. 
-Then, it will calculate a score based on the ratio of the proportion of alternate reads of the most variant sample above that of the less variant sample. This score will be then modified considering chosen values of ratio to call a variant true positive or true negative (see [Cut-off proportions](#cut\\-off-proportions)).
-As a result, the highest scores will be associated with sites likely to be differentially distributed among samples.
+For each variant in each sample, `varif` will calculate the Variant Alternate Frequency (VAF) and classify it as a true variant or not based on filters applied with the available options. The values of VAFs for each variant are compared to find sites likely to be differentially distributed among samples.
 
 # Output
 
-## Scores
+Variants passing the filters will be sent to the standard output with the option `--show` and/or to a VCF file if the option `--filtered-vcf` is set. Additionally, a CSV file containing each individual variant (variants from the same chromosome location are separated) is generated if the option `--filtered-csv` is set.
 
-These scores will be saved in a CSV file whose headers are:
+## CSV content
+
+The output CSV file separated by semicolons contains:
 
 - Chromosome: The chromosome name
 - Position: The starting position of the variant
 - Type: The type of variant (SNP, INDEL...)
 - Ref: The reference sequence
 - Alt: The alternate sequence
-- CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier
-- CDSalt: The windowed CDS alternate sequences including the variant
-- AAref: The amino acid sequence resulting from the windowed reference sequence
-- AAalt: The amino acid sequence resulting from the windowed alternate sequences
-- Annotation: The annotation described in the GFF file followed by the gene identifier
+- CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier\*
+- CDSalt: The windowed CDS alternate sequences including the variant\*
+- AAref: The amino acid sequence resulting from the windowed reference sequence\*
+- AAalt: The amino acid sequence resulting from the windowed alternate sequences\*
+- Annotation: The annotation described in the GFF file followed by the gene identifier\*\*
 - Score: The score of the variant (see [Process](#process))
 - Sample#1: Proportion of alternate allele for sample 1
 - ...
 - Sample#n: Proportion of alternate allele for sample n
-- Con: Samples having the reference sequence
-- Mut: Sample having the alternate sequence
-- Mix: Samples having a mixture of sequences
-- Und: Samples having not enough depth at this position
+- Con: Sample(s) having the reference sequence
+- Mut: Sample(s) having the alternate sequence
+- Mix: Sample(s) having a mixture of sequences
+- Und: Sample(s) having not enough depth at this position
 
-Do not specify the option `--csv` if you don't want this file to be created.
-
-## VCF
-
-Variants passing the filters mentioned below will be sent to the standard output with the option`--show` and/or to a file if the option `--filteredvcf` is given a value.
+\*: Applies for CDS regions, otherwise *NA*
+\*\*: Applies for CDS and intronic regions, otherwise *NA*
 
 # Filters
 
 ## Minimal depth
 
-The variant allele frequencies are calculated only if the sample read depth (the sum of all the reads REF and ALT) is equal or superior to this value.
+The variant allele frequencies are calculated only if the sample allele depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
 
 ## Cut-off proportions
 
-There are 2 cut-offs used by `varif`, the first one (**cut-off #1**) being the minimal proportion to be considered a true variant, the second one (**cut-off #2**) the maximal proportion to be considered a true reference.
+There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and minRAF to 0.2.
 
-These cut-offs are used to modify the score in order to know whether the site is likely to be:
+For each variant at a chromosomal location, the variant allele frequency (VAF) is calculated with:
 
-- Differentially distributed among samples, hence the less variant is below **cut-off #2** and the most variant is above **cut-off #1**. *The score is not modified*.
-- Fixed in the population, hence the less variant site is still above **cut-off #1**. *The score is set to 0*.
-- Not differentially distributed among samples, for all other cases. *The opposite of the score becomes the score*.
+$VAF ~=~  \frac{(\textit{allele depth of the variant})}{sum(\textit{allele depths of other variants} ~+~ \textit{allele depth of reference})}$
+
+If the VAF is above minAAF, it should then be considered a true variant, while if the VAF is below minRAF, it should be considered a true reference.
+
+The combination of VAFs are used to classify variants that are:
+
+- Differentially distributed among samples:
+  At least one VAF of the samples is below or equal to maxRAF and at least one VAF is above or equal to minAAF.
+- Fixed in the population:
+  All VAFs of the samples are above or equal to minAAF.
+- Not differentially distributed among samples, for all other cases.
 
 ## Specific regions
 
-Variants can be filtered by their location, i. e. either inside or outside a gene as annotated in the GFF file. Variants are shown if their position in the VCF file are inside a gene (hence INDELs staring just before a gene will not be selected).
+By default, all genomic regions are shown with the option `--all-regions`. However, variants outside a gene (as annotated in the GFF file) can be removed from the output with the option `--gene-regions`. Variants are shown if their position in the VCF file are inside a gene (hence INDELs staring just before a gene will not be selected).
 
-## Variant types
+## Variant scores
 
-Variants can also be filtered by their score; you can show all variants whose score is:
+Variants can also be filtered by their score which are calculated differently whether:
 
-- Any value: all variants
-- Equal or superior to 0: fixed and differentially expressed variants
-- Superior to 0: differentially expressed variants.
+- The variant is differentially expressed among samples:
+  $\textit{Score} ~=~ \frac{maxVAF}{minVAF}$
+  If the minVAF is equal to 0, a maximum can be set with the option `--max-score` (99999 by default)
+- The variant is fixed in the population:
+  $\textit{Score} ~=~ 0$
+  All these variants can be omitted from the output by adding the option `--no-fixed`
+- All other cases:
+  $\textit{Score} ~=~ -\frac{maxVAF}{minVAF}$
+  Similarly, if the minVAF is equal to 0, a minimum can be set with the option `--min-score` (-99999 by default)
 
 # Additional information
 
-## Annotation
+## Multiple features
 
 Variant inside genes are annotated given the gene annotation available in the GFF file. Several gene annotations are separated by a ':', as well as the associated CDS and amino acid sequences when the variant is inside a CDS.
 
-Variants outside genes will have a *NA* instead.
-
 ## Automatic translation
 
-When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant and bases before and after that are included in a chosen window.
+When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant plus bases before and after included in a chosen window with `--window-before` and `--window-after` options.
 Windows in bases before the and after the whole variant (in the direction of the translation) have to be both greater than 1 in order to output at least one amino acid.
 The translation will stop if:
 
-- The window is completeley translated
+- The window is completely translated
+
 - The end of the CDS is reached
+
 - A stop codon is obtained
+
+# Examples
+
+1. Save all possible variants regardless of their VAFs.
+    ```bash
+    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+        --fixed --all-variants --all-regions \
+        --filtered-csv filtered-variants.csv \
+        --filtered-vcf filtered-variants.vcf
+    ```
+
+2. Save variants falling in a gene regardless of their VAFs.
+
+   ```bash
+   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --fixed --all-variants --gene-regions \
+       --filtered-csv filtered-variants.csv \
+       --filtered-vcf filtered-variants.vcf
+   ```
+
+3. Save variants falling in a gene and differentially expressed only with CDS sequences including 10 bases before and after the variant.
+
+   ```bash
+   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --no-fixed --best-variants --gene-regions \
+       --window-before 10 --window-after 10 \
+       --filtered-csv filtered-variants.csv \
+       --filtered-vcf filtered-variants.vcf
+   ```
+
+   
+
