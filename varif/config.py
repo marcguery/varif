@@ -5,12 +5,12 @@ class Config(object):
 
     @staticmethod
     def set_options():
-        parser=argparse.ArgumentParser(
-            description='''
+        parser = argparse.ArgumentParser(description='''
             Filter and annotate variants likely to be
             differentially expressed (or fixed) among your sample(s)
             wih varif.
-            ''')
+            ''', formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=30))
+        
         parser.add_argument('-vcf', type=str, default=None,
         metavar="FILE",
         help='VCF file')
@@ -39,12 +39,18 @@ class Config(object):
         help='Add variants only in gene-annotated regions')
 
 
-        parser.add_argument('--window-before', dest='windowBefore', type=int, default=2,
+        parser.add_argument('--nucl-window-before', dest='nuclWindowBefore', type=int, default=0,
         metavar="INT",
         help='Number of bases before the variant to be included')
-        parser.add_argument('--window-after', dest='windowAfter', type=int, default=2,
+        parser.add_argument('--nucl-window-after', dest='nuclWindowAfter', type=int, default=0,
         metavar="INT",
         help='Number of bases after the variant to be included')
+        parser.add_argument('--prot-window-before', dest='protWindowBefore', type=int, default=0,
+        metavar="INT",
+        help='Number of amino acids before the variant to be included')
+        parser.add_argument('--prot-window-after', dest='protWindowAfter', type=int, default=0,
+        metavar="INT",
+        help='Number of amino acids after the variant to be included')
         
 
         parser.add_argument('--show', dest='show', action='store_true',
@@ -78,5 +84,6 @@ class Config(object):
 
         parser.add_argument('--version', dest='version', action='store_true',
         help='Show varif version')
+        
         args=parser.parse_args()
         Config.options=vars(args)

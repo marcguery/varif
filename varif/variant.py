@@ -31,6 +31,7 @@ class Variant(object):
         self.position=vcfLine[ranks[1]]
             
         self.ref=vcfLine[ranks[3]]
+        self.refwindow=["",""]
         self.alts=vcfLine[ranks[4]].split(",")
         formatSplitted=vcfLine[ranks[8]].split(":")
         for i in range(len(formatSplitted)):

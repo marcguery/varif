@@ -97,7 +97,8 @@ class Variants(object):
             self.variants[identifier]={
                 "chromosome":variant.chromosome, "position":int(variant.position),
                 "scores":variant.scores, "category":variant.category,
-                "ref":variant.ref, "alts":variant.alts, 
+                "ref":variant.ref, "alts":variant.alts,
+                "refwindow":variant.refwindow,
                 "ratios":variant.ratios, "groups":variant.groups,
                 "features":[],
                 "cdsRef":{}, "cdsAlts":{},

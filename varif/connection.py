@@ -1,4 +1,5 @@
 import math
+from sys import stderr
 from .config import Config
 from .variants import Variants
 from .annotations import Annotations
@@ -29,7 +30,7 @@ class Connection(object):
     
     @property
     def version(self):
-        return "0.1.4"
+        return "0.1.5"
     
     def check_arguments(self, arguments):
         if Config.options["version"]:
@@ -38,6 +39,12 @@ class Connection(object):
         for arg in ["vcf", "gff", "fasta"]:
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
+        for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
+            if arguments[arg] < 0 or arguments[arg] > 1000:
+                raise ValueError("DNA window '%s' must be between 0 and 1000, not %s"%(arg, arguments[arg])) 
+        for arg in ["protWindowBefore", "protWindowAfter"]:
+            if arguments[arg] < 0 or arguments[arg] > 400:
+                raise ValueError("Protein window '%s' must be between 0 and 400, not %s"%(arg, arguments[arg]))
     
     def map_GFFid_VCFpos(self, chromosome, position):
         """
@@ -94,18 +101,14 @@ class Connection(object):
         return (list) : Aminoacids before and after mutation
         """
         assert self.annotations.annotations[gffId]['annotation']=='CDS'
-        try:
-            assert Config.options["windowBefore"] >= 2 and Config.options["windowAfter"] >= 2
-        except AssertionError:
-            raise ValueError("Windows before (input:%s) and after (input:%s) should be above 2"%(Config.options["windowBefore"], Config.options["windowAfter"]))
         phase=int(self.annotations.annotations[gffId]['phase'])
         strand=self.annotations.annotations[gffId]['strand']
         startCDS=self.annotations.annotations[gffId]['start']
         endCDS=self.annotations.annotations[gffId]['end']
         startIndex=position-1
         endIndex=startIndex+len(reference)
-        windowBefore=Config.options["windowBefore"]
-        windowAfter=Config.options["windowAfter"]
+        windowBefore=2+Config.options["protWindowBefore"]*3
+        windowAfter=2+Config.options["protWindowAfter"]*3
 
         #The number of bases to skip
         # knowing that the window is +/- windows bases after mutation
@@ -146,10 +149,14 @@ class Connection(object):
                 "Annotation","Score"]
             line=sep.join(baseHeader+self.variants.samples+["Con", "Mut", "Mix", "Und"])+"\n"
         else:
+            windowLenSum=len(self.variants.variants[variantId]["refwindow"][0])+len(self.variants.variants[variantId]["refwindow"][1])
+            leftwindow=self.variants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
+            rightwindow="|"+self.variants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
             content=[
                 self.variants.variants[variantId]["chromosome"], str(self.variants.variants[variantId]["position"]), 
                 self.variants.variants[variantId]["category"],
-                self.variants.variants[variantId]["ref"], self.variants.variants[variantId]["alts"][altIndex],
+                leftwindow+self.variants.variants[variantId]["ref"]+rightwindow, 
+                self.variants.variants[variantId]["alts"][altIndex],
                 "NA", "NA", "NA","NA", "NA",
                 str(self.variants.variants[variantId]["scores"][altIndex])]
             content+=["NA"]*len(self.variants.samples)
@@ -181,7 +188,26 @@ class Connection(object):
                 content[11+len(self.variants.samples)+i]=":".join(groups[i])
             line=sep.join(content)+"\n"
         return line
+    
+    def window_sequence(self, variantId):
+        """
+        Extract DNA sequence before and after the variant
 
+        variantId (str) : Unique identifier of the variant
+
+        """
+        chr = self.variants.variants[variantId]["chromosome"]
+        pos = self.variants.variants[variantId]["position"]
+        seqLength = len(self.variants.variants[variantId]["ref"])
+        posBefore = pos - Config.options["nuclWindowBefore"]
+        posAfter = pos + Config.options["nuclWindowAfter"]
+        if posBefore < 1 or posAfter + seqLength > len(self.fasta.data[chr]):
+            print("Window too wide for variant %s (%s:%s)"%(variantId, chr, pos), file=stderr)
+            posBefore = 1 if posBefore < 1 else posBefore
+            posAfter = -2 - seqLength if posAfter + seqLength > len(self.fasta.data[chr]) else posAfter
+
+        self.variants.variants[variantId]["refwindow"]=[self.fasta.data[chr][posBefore-1:pos-1],self.fasta.data[chr][pos+seqLength-1:posAfter+seqLength-1]]
+        
     def load_features(self, variantId):
         """
         Store amino acids obtained from CDS translations
@@ -232,6 +258,7 @@ class Connection(object):
             self.variants.variants[key]["features"]=gffIds
             if len(self.variants.variants[key]["features"])==0 and allRegions is False:
                 continue #No feature-surrounded variants
+            self.window_sequence(key)
             self.load_features(key)
             #Each alt has its line
             for altIndex, alt in enumerate(self.variants.variants[key]["alts"]):

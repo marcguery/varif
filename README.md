@@ -100,9 +100,9 @@ The variant allele frequencies are calculated only if the sample allele depth (t
 
 There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and minRAF to 0.2.
 
-For each variant at a chromosomal location, the variant allele frequency (VAF) is calculated with:
+For each variant at a chromosomal location, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
 
-$VAF ~=~  \frac{(\textit{allele depth of the variant})}{sum(\textit{allele depths of other variants} ~+~ \textit{allele depth of reference})}$
+***VAF*** = (*variant AD*) / (*other variants AD* + *reference AD*)
 
 If the VAF is above minAAF, it should then be considered a true variant, while if the VAF is below minRAF, it should be considered a true reference.
 
@@ -123,25 +123,29 @@ By default, all genomic regions are shown with the option `--all-regions`. Howev
 Variants can also be filtered by their score which are calculated differently whether:
 
 - The variant is differentially expressed among samples:
-  $\textit{Score} ~=~ \frac{maxVAF}{minVAF}$
+  *Score* = *maxVAF* / *minVAF*
   If the minVAF is equal to 0, a maximum can be set with the option `--max-score` (99999 by default)
 - The variant is fixed in the population:
-  $\textit{Score} ~=~ 0$
+  *Score* = 0​
   All these variants can be omitted from the output by adding the option `--no-fixed`
 - All other cases:
-  $\textit{Score} ~=~ -\frac{maxVAF}{minVAF}$
+  *Score* = -*maxVAF* / *minVAF*
   Similarly, if the minVAF is equal to 0, a minimum can be set with the option `--min-score` (-99999 by default)
 
 # Additional information
 
+## Up and downstream genomic sequences
+
+The genomic sequences that are upstream or downstream of the reference allele can be shown in the Ref column of the output CSV file with respectively `--nucl-window-before` and `--nucl-window-after` .
+
 ## Multiple features
 
-Variant inside genes are annotated given the gene annotation available in the GFF file. Several gene annotations are separated by a ':', as well as the associated CDS and amino acid sequences when the variant is inside a CDS.
+Variant inside genes are annotated given the gene annotation available in the GFF file. Several gene annotations are separated by a ':' , as well as the associated CDS and amino acid sequences when the variant is inside a CDS.
 
 ## Automatic translation
 
-When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant plus bases before and after included in a chosen window with `--window-before` and `--window-after` options.
-Windows in bases before the and after the whole variant (in the direction of the translation) have to be both greater than 1 in order to output at least one amino acid.
+When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant plus bases before and after included in a chosen window with `--prot-window-before` and `--prot-window-after` options.
+Windows are expressed in amino acid before the and after the whole variant in the direction of the translation.
 The translation will stop if:
 
 - The window is completely translated
@@ -161,23 +165,24 @@ The translation will stop if:
         --filtered-vcf filtered-variants.vcf
     ```
 
-2. Save variants falling in a gene regardless of their VAFs.
+2. Save variants falling in a gene regardless of their VAFs with 10 bases upstream and downstream of the variants.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --fixed --all-variants --gene-regions \
+       --nucl-window-before 10 --nucl-window-after 10 \
        --filtered-csv filtered-variants.csv \
        --filtered-vcf filtered-variants.vcf
    ```
 
-3. Save variants falling in a gene and differentially expressed only with CDS sequences including 10 bases before and after the variant.
+3. Save variants falling in a gene and differentially expressed (positive VAF) with protein sequences including 5 amino acids before and after the variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
-       --window-before 10 --window-after 10 \
+       --prot-window-before 5 --prot-window-after 5 \
        --filtered-csv filtered-variants.csv \
        --filtered-vcf filtered-variants.vcf
    ```
