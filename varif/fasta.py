@@ -86,7 +86,3 @@ class Fasta(object):
             protein+=aminoacid
             i+=3
         return protein
-
-
-
-        

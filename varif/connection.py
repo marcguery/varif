@@ -1,4 +1,5 @@
 import math
+import numpy as np
 from sys import stderr
 from .config import Config
 from .variants import Variants
@@ -25,12 +26,12 @@ class Connection(object):
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
         self.get_all_alts(
             fixed=Config.options["fixed"], allVariants=Config.options["allVariants"],
-            allRegions=Config.options["allRegions"], show=Config.options["show"],
+            allRegions=Config.options["allRegions"],
             csv=Config.options["csv"], filteredvcf=Config.options["filteredvcf"])
     
     @property
     def version(self):
-        return "0.1.5"
+        return "0.2.0"
     
     def check_arguments(self, arguments):
         if Config.options["version"]:
@@ -45,6 +46,7 @@ class Connection(object):
         for arg in ["protWindowBefore", "protWindowAfter"]:
             if arguments[arg] < 0 or arguments[arg] > 400:
                 raise ValueError("Protein window '%s' must be between 0 and 400, not %s"%(arg, arguments[arg]))
+        print("Running Varif %s with options \n%s"%(self.version, "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
     
     def map_GFFid_VCFpos(self, chromosome, position):
         """
@@ -146,8 +148,8 @@ class Connection(object):
             baseHeader=[
                 "Chromosome", "Position", "Type",
                 "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
-                "Annotation","Score"]
-            line=sep.join(baseHeader+self.variants.samples+["Con", "Mut", "Mix", "Und"])+"\n"
+                "Annotation","Proportions"]
+            line=sep.join(baseHeader+self.variants.samples)+"\n"
         else:
             windowLenSum=len(self.variants.variants[variantId]["refwindow"][0])+len(self.variants.variants[variantId]["refwindow"][1])
             leftwindow=self.variants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
@@ -158,9 +160,8 @@ class Connection(object):
                 leftwindow+self.variants.variants[variantId]["ref"]+rightwindow, 
                 self.variants.variants[variantId]["alts"][altIndex],
                 "NA", "NA", "NA","NA", "NA",
-                str(self.variants.variants[variantId]["scores"][altIndex])]
+                ":".join(f'{props:03}' for props in self.variants.variants[variantId]["props"][altIndex])]
             content+=["NA"]*len(self.variants.samples)
-            content+=["NA", "NA", "NA", "NA"]
 
             cdsref=[]
             aaref=[]
@@ -179,13 +180,8 @@ class Connection(object):
                 content[8]=":".join(aaalts) #different aa alt
             annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in self.variants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
             content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
-            groups={0:[], 1:[], 2:[], 3:[]}
             for i, sample in enumerate(self.variants.samples):#samples alt ratios
                 content[11+i]=str(self.variants.variants[variantId]["ratios"][sample][altIndex+1])
-                groupNumber=self.variants.variants[variantId]["groups"][sample][altIndex+1]
-                groups[groupNumber].append(sample)
-            for i in groups:
-                content[11+len(self.variants.samples)+i]=":".join(groups[i])
             line=sep.join(content)+"\n"
         return line
     
@@ -229,22 +225,19 @@ class Connection(object):
             self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[1]
             self.variants.variants[variantId]["cdsRef"][gffId]=aaDiff[0]
 
-    def get_all_alts(self, fixed, allVariants, allRegions, show, csv, filteredvcf):
+    def get_all_alts(self, fixed, allVariants, allRegions, csv, filteredvcf):
         """
         Retrieve and merge information about the variants filtered
 
         fixed (bool) : Show also fixed variants if True
         allVariants (bool) : Show all variants if True (even fixed)
         allRegions (bool) : Show not only CDS if True
-        show (bool) : Print in stdout
         csv (str) : File path of the CSV (semicolon separated)
         filteredvcf (str) : File path of the filtered VCF
 
 
         """
-        #Filter by score to know what to show
-        code=-1 if fixed is True else 1
-        code=-math.inf if allVariants is True else code
+        fixed=True if allVariants is True else fixed
         sortedKeys=sorted(self.variants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         #Headers
         printedLine=self.print_line()
@@ -252,23 +245,26 @@ class Connection(object):
         vcfcorrespondingline=self.variants.headerlinenumber-1
         #Body
         for key in sortedKeys:
-            if not any(score > code for score in self.variants.variants[key]["scores"]):
-                continue #Do not do anything if everyone is garbage
             gffIds=self.map_GFFid_VCFpos(self.variants.variants[key]["chromosome"], self.variants.variants[key]["position"])
             self.variants.variants[key]["features"]=gffIds
-            if len(self.variants.variants[key]["features"])==0 and allRegions is False:
+            if len(self.variants.variants[key]["features"]) == 0 and allRegions is False:
                 continue #No feature-surrounded variants
             self.window_sequence(key)
             self.load_features(key)
             #Each alt has its line
             for altIndex, alt in enumerate(self.variants.variants[key]["alts"]):
-                if self.variants.variants[key]["scores"][altIndex] <= code:
-                    continue #The score is not good enough
+                if self.variants.variants[key]["types"][altIndex] == "ambiguous" and allVariants is False:
+                    continue #The VAF or RAF are unknown (low depth) or in between the minimum and maximum set
+                elif self.variants.variants[key]["types"][altIndex] == "fixed" and fixed is False:
+                    continue #This variant is fixed (all are ref or all are alt)
                 printedLine+=self.print_line(key, altIndex)
                 if self.variants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
                     vcfcorrespondingline=self.variants.variants[key]["vcfline"]
                     filteredvcfcontent+=self.variants.vcffile[vcfcorrespondingline-1]
-        if show is True:
+        if csv is None and filteredvcf is None:
+            print("-----Filtered CSV file:-----")
+            print(printedLine.strip("\n"))
+            print("-----Filtered VCF file:-----")
             print(filteredvcfcontent.strip("\n"))
         if csv is not None:
             with open(csv, 'w') as f:
@@ -276,4 +272,3 @@ class Connection(object):
         if filteredvcf is not None:
             with open(filteredvcf, 'w') as f:
                 f.write(filteredvcfcontent)
-

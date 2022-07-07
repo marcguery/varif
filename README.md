@@ -1,4 +1,4 @@
-# varif
+# Varif
 A filtering and annotating program for VCF-formatted variants.
 
 # Installation and upgrade
@@ -62,7 +62,7 @@ For each variant in each sample, `varif` will calculate the Variant Alternate Fr
 
 # Output
 
-Variants passing the filters will be sent to the standard output with the option `--show` and/or to a VCF file if the option `--filtered-vcf` is set. Additionally, a CSV file containing each individual variant (variants from the same chromosome location are separated) is generated if the option `--filtered-csv` is set.
+Variants passing the filters will be sent to the standard output by default or to a VCF file if the option `--filtered-vcf` is set. Additionally, a CSV file containing each individual variant (variants from the same chromosome location are separated) is generated if the option `--filtered-csv` is set.
 
 ## CSV content
 
@@ -71,7 +71,7 @@ The output CSV file separated by semicolons contains:
 - Chromosome: The chromosome name
 - Position: The starting position of the variant
 - Type: The type of variant (SNP, INDEL...)
-- Ref: The reference sequence
+- Ref: The reference sequence +/- up and downstream sequences (separated by '|')
 - Alt: The alternate sequence
 - CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier\*
 - CDSalt: The windowed CDS alternate sequences including the variant\*
@@ -82,12 +82,9 @@ The output CSV file separated by semicolons contains:
 - Sample#1: Proportion of alternate allele for sample 1
 - ...
 - Sample#n: Proportion of alternate allele for sample n
-- Con: Sample(s) having the reference sequence
-- Mut: Sample(s) having the alternate sequence
-- Mix: Sample(s) having a mixture of sequences
-- Und: Sample(s) having not enough depth at this position
 
 \*: Applies for CDS regions, otherwise *NA*
+
 \*\*: Applies for CDS and intronic regions, otherwise *NA*
 
 # Filters
@@ -96,9 +93,13 @@ The output CSV file separated by semicolons contains:
 
 The variant allele frequencies are calculated only if the sample allele depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
 
-## Cut-off proportions
+## Control groups
 
-There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and minRAF to 0.2.
+It is possible to separate samples into 2 groups (positive and negative control groups) that are used to determine which variant is differentially expressed between the 2 groups based on the allele frequencies. By default, all samples belong to the same group which implies that the positive and negative control groups are the same. The option `--control` can be used to specify the negative control group with a comma separated list of sample identifiers corresponding to their order in the VCF header, starting by 1. The relationship between the 2 groups is symmetrical, meaning that variants detected in both groups can be considered differentially expressed.
+
+## Allele frequencies
+
+There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and minRAF to 0.2.
 
 For each variant at a chromosomal location, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
 
@@ -108,11 +109,12 @@ If the VAF is above minAAF, it should then be considered a true variant, while i
 
 The combination of VAFs are used to classify variants that are:
 
-- Differentially distributed among samples:
-  At least one VAF of the samples is below or equal to maxRAF and at least one VAF is above or equal to minAAF.
+- Differentially distributed between positive and negative control samples:
+  At least one VAF of the **negative** control samples is below or equal to maxRAF (true reference) and at least one VAF of the **positive** control samples is above or equal to minAAF (true variant).
+  The rule applies symmetrically, when at least one VAF of the **positive** control samples is a true reference and at least one VAF of the **negative** control samples is a true variant.
 - Fixed in the population:
-  All VAFs of the samples are above or equal to minAAF.
-- Not differentially distributed among samples, for all other cases.
+  All VAFs of the samples are above or equal to minAAF or below or equal to maxRAF. Either the option `--all-variants` or `--fixed` will show these variants.
+- Not differentially distributed among samples, for all other cases. Only the option `--all-variants` will show these variants.
 
 ## Specific regions
 
@@ -120,17 +122,18 @@ By default, all genomic regions are shown with the option `--all-regions`. Howev
 
 ## Variant scores
 
-Variants can also be filtered by their score which are calculated differently whether:
+The variant score displayed at the Score column of the CSV file is made of four different percentages separated by a ':' corresponding respectively to:
 
-- The variant is differentially expressed among samples:
-  *Score* = *maxVAF* / *minVAF*
-  If the minVAF is equal to 0, a maximum can be set with the option `--max-score` (99999 by default)
-- The variant is fixed in the population:
-  *Score* = 0​
-  All these variants can be omitted from the output by adding the option `--no-fixed`
-- All other cases:
-  *Score* = -*maxVAF* / *minVAF*
-  Similarly, if the minVAF is equal to 0, a minimum can be set with the option `--min-score` (-99999 by default)
+- the percentage of positive control samples for which the allele is a true variant
+- the percentage of positive control samples for which the allele is a true reference
+- the percentage of negative control samples for which the allele is a true variant
+- the percentage of negative control samples for which the allele is a true reference
+
+As a result fixed variant can be either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed variant in the population).
+
+Differentially expressed variants can either have the first and the fourth percentages different from 0 (variant present in at least one sample from the positive control group and absent from at least one sample from the negative control group) or the second and the third (variant present in at least one sample from the negative control group and absent from at least one sample from the positive control group).
+
+Percentages within each group do not add up to 100 when there are samples that have not sufficient read depth to calculate an allele frequency.
 
 # Additional information
 
@@ -144,8 +147,7 @@ Variant inside genes are annotated given the gene annotation available in the GF
 
 ## Automatic translation
 
-When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant plus bases before and after included in a chosen window with `--prot-window-before` and `--prot-window-after` options.
-Windows are expressed in amino acid before the and after the whole variant in the direction of the translation.
+When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant plus amino acids before and after (in the direction of the translation) included in a chosen window with `--prot-window-before` and `--prot-window-after` options.
 The translation will stop if:
 
 - The window is completely translated

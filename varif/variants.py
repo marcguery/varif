@@ -1,8 +1,9 @@
+from sys import stderr
 from .config import Config
 from .variant import Variant
 
 class Variants(object):
-    """A bunch if variants taken from a VCF file."""
+    """A bunch of variants taken from a VCF file."""
     def __init__(self):
         """
         variants (dict) : Key (ID of the variant), value (Info on the variant)
@@ -11,6 +12,8 @@ class Variants(object):
         vcffile (list) : The list of lines in the input VCF file
         headerlinenumber : The line number of the VCF file corresponding to the end of the header
         samples (list) : Name of samples
+        refRanks (list) : Rank of each negative control sample (starting at 1)
+        refSamples (list) : Name of each negative control sample
         ranks (list) : Rank of each field in VCF
 
         """
@@ -24,6 +27,18 @@ class Variants(object):
         self.headerlinenumber=1
         self.samples=[]
         self.config=Config
+        refRanksraw=Config.options["refRanks"]
+        self.refRanks=[]
+        for arg in refRanksraw.split(","):
+            #In the case there is no control samples registered:
+            if arg == "" and len(refRanksraw.split(",")) == 1:
+                break
+            try:
+                self.refRanks.append(int(arg.strip("")))
+            except Exception as err:
+                print("Bad format of the control sample numbers", file = stderr)
+                print(err, file = stderr)
+        self.refSamples=[]
 
         #A very complicated stuff where a simple order to follow would have been enough
         chromRank=self.vcfHeaderSorted[self.vcfHeaderExpected[0]]
@@ -55,10 +70,13 @@ class Variants(object):
             colname=header[n].rstrip("\n")
             while colname != self.vcfHeaderExpected[-1] and n >= 0:
                 self.samples.append(colname)
+                if n - (len(self.vcfHeaderExpected)-1) in self.refRanks:
+                    self.refSamples.append(colname)
                 n-=1
                 colname=header[n]
-        except Exception:
-            print("Bad VCF header")
+        except Exception as err:
+            print("Bad VCF header", file = stderr)
+            print(err, file = stderr)
 
     def load_variants_from_VCF(self, vcf):
         """
@@ -79,11 +97,13 @@ class Variants(object):
         #Check VCF formatting
         self.check_vcf_header(headerline.split("\t"))
         samplesRanks=[self.vcfHeaderSorted[sample] for sample in self.samples]
+        if len(self.refSamples) > 0:
+            print("Control samples are : %s"%(", ".join(self.refSamples)))
         #Storing variants
         while n < len(self.vcffile):
-            variant=Variant(self.vcffile[n], self.ranks, self.samples, samplesRanks)
+            variant=Variant(self.vcffile[n], self.ranks, self.samples, samplesRanks, self.refSamples)
             variant.calculate_ratios(self.config.options["mindepth"])
-            variant.scores_from_ratios()
+            variant.props_from_ratios()
 
             #Generate unique ID for each variant
             identifier=variant.chromosome+":"+variant.position
@@ -96,10 +116,11 @@ class Variants(object):
                 identifier=identifier.split(".")[0]+"."+str(num)
             self.variants[identifier]={
                 "chromosome":variant.chromosome, "position":int(variant.position),
-                "scores":variant.scores, "category":variant.category,
+                "props":variant.props, "types":variant.types,
+                "category":variant.category,
                 "ref":variant.ref, "alts":variant.alts,
                 "refwindow":variant.refwindow,
-                "ratios":variant.ratios, "groups":variant.groups,
+                "ratios":variant.ratios,
                 "features":[],
                 "cdsRef":{}, "cdsAlts":{},
                 "aaRef":{}, "aaAlts":{},

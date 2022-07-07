@@ -1,3 +1,4 @@
+from sys import stderr
 from .annotation import Annotation
 
 class Annotations(object):
@@ -59,8 +60,8 @@ class Annotations(object):
             duplicatedidnumber=1
             newannotation=annotation.id
             while newannotation in self.annotations and duplicatedidnumber < 100:
-                print("There is a duplicate in the GFF file, ID: %s"%newannotation)
-                print("Automatically assigning a new ID...")
+                print("There is a duplicate in the GFF file, ID: %s"%newannotation, file = stderr)
+                print("Automatically assigning a new ID...", file = stderr)
                 newannotation=annotation.id+".dupl."+str(duplicatedidnumber)
                 duplicatedidnumber+=1
             annotation.id=newannotation
@@ -71,7 +72,7 @@ class Annotations(object):
                     if parent in self.annotations:
                         descs.append(self.annotations[parent]['description'])
                     else:
-                        print("Orphan entry (%s) in the GFF file missing parent (%s)"%(annotation.id, parent))
+                        print("Orphan entry (%s) in the GFF file missing parent (%s)"%(annotation.id, parent), file = stderr)
                         raise(Exception)
                 annotation.description=",".join(descs)
             #Storing annotations
