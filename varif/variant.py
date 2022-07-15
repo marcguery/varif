@@ -21,7 +21,7 @@ class Variant(object):
         ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
         props (list) : True var and true ref prct of + and - control groups for each alt
         types (list) : Type of each variant among differential, fixed and ambiguous
-        category (str) : Type of variant : 'SNP' or 'INDEL'
+        category (str) : Type of variant : 'SNP' or 'INDEL' and annotation if available
 
         """
         self.config=Config
@@ -43,13 +43,7 @@ class Variant(object):
         self.ratios={}
         self.props=[]
         self.types=[]
-    
-    @property
-    def category(self):
-        if all(len(self.ref)==len(alt) for alt in self.alts):
-            return "SNP"
-        else:
-            return "INDEL"        
+        self.category=""       
     
     def calculate_ratios(self, mindepth):
         """

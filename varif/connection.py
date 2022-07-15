@@ -1,4 +1,5 @@
 import math
+from pickletools import read_unicodestring1
 import numpy as np
 from sys import stderr
 from .config import Config
@@ -31,7 +32,7 @@ class Connection(object):
     
     @property
     def version(self):
-        return "0.2.0"
+        return "0.2.1"
     
     def check_arguments(self, arguments):
         if Config.options["version"]:
@@ -41,22 +42,24 @@ class Connection(object):
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
         for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
-            if arguments[arg] < 0 or arguments[arg] > 1000:
-                raise ValueError("DNA window '%s' must be between 0 and 1000, not %s"%(arg, arguments[arg])) 
+            if arguments[arg] < 0:
+                raise ValueError("DNA window '%s' must be above 0, not %s"%(arg, arguments[arg])) 
         for arg in ["protWindowBefore", "protWindowAfter"]:
-            if arguments[arg] < 0 or arguments[arg] > 400:
-                raise ValueError("Protein window '%s' must be between 0 and 400, not %s"%(arg, arguments[arg]))
+            if arguments[arg] < 0:
+                raise ValueError("Protein window '%s' must be above 0, not %s"%(arg, arguments[arg]))
         print("Running Varif %s with options \n%s"%(self.version, "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
     
-    def map_GFFid_VCFpos(self, chromosome, position):
+    def map_GFFid_VCFpos(self, chromosome, startPosition, endPosition):
         """
         Retrieve all GFF feature surrounding the variant
 
         chromosome (str) : Name of chromosome
-        position (int) : First position of variant
+        startPosition (int) : First position of variant
+        endPosition (int) : Last position of variant
 
         return (list) : Identifiers of GFF features retrieved
         """
+        assert endPosition >= startPosition
         #This is a half-cut search
         finished=False
         #Maximum index of the feature to search
@@ -64,30 +67,36 @@ class Connection(object):
         #Minimum index of the feature to search
         minValue=0
         #Half of those
-        index=math.floor(maxValue+minValue/2)
+        currindex=math.floor(maxValue+minValue/2)
         identifiers=[]
+        matchIndexes=[]
         #Finding a random feature
         while not finished:
             #Minimum position of the feature checked
-            mini=self.annotations.index[chromosome][index][0]
+            mini = self.annotations.index[chromosome][currindex][0]
             #Maximum position of the feature checked
-            maxi=self.annotations.index[chromosome][index+1][0]
+            maxi = max(list(self.annotations.index[chromosome][currindex][1].keys()))
             #The feature surrounds the variant
-            if position >= mini and position <= maxi:
+            if startPosition >= mini and startPosition <= maxi:
                 finished=True
             #The variant is in upper half of the cut
-            elif position > maxi and index < maxValue:
-                minValue=index+1
-                index=math.ceil((maxValue+index)/2)
+            elif startPosition > maxi and currindex < maxValue:
+                minValue=currindex+1
+                currindex=math.ceil((maxValue+currindex)/2)
             #The variant is in lower half of the cut
-            elif position < mini and index > minValue:
-                maxValue=index
-                index=math.floor((index+minValue)/2)
+            elif startPosition < mini and currindex > minValue:
+                maxValue=currindex
+                currindex=math.floor((currindex+minValue)/2)
             #The variant is not surrouded by a feature
             else:
-                return identifiers
-        identPerPos=[self.annotations.index[chromosome][index][1][key] for key in self.annotations.index[chromosome][index][1] if key>=position]
-        identifiers=[identifier for position in identPerPos for identifier in position]
+                finished=True
+        while currindex < len(self.annotations.index[chromosome])-1 and startPosition <= maxi and endPosition >= mini:
+            for endFeature in self.annotations.index[chromosome][currindex][1]:
+                if startPosition <= endFeature:
+                    identifiers.extend(self.annotations.index[chromosome][currindex][1][endFeature])
+            currindex += 1
+            mini = self.annotations.index[chromosome][currindex][0]
+            maxi = max(list(self.annotations.index[chromosome][currindex][1].keys()))
         return identifiers
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId):
@@ -103,12 +112,22 @@ class Connection(object):
         return (list) : Aminoacids before and after mutation
         """
         assert self.annotations.annotations[gffId]['annotation']=='CDS'
-        phase=int(self.annotations.annotations[gffId]['phase'])
+        parentalid = self.annotations.annotations[gffId]["parents"][0]
+        if len(self.annotations.annotations[gffId]["parents"]) > 1:
+            print("Ambiguous origin of CDS %s: one of %s. Taking the first one (%s) by default"%(gffId, ", ".join(self.annotations.annotations[gffId]["parents"]), parentalid), file = stderr)
+        allCDS = [cds for cds in self.annotations.genesID[self.annotations.annotations[gffId]['masterid']]["CDS"] if self.annotations.annotations[cds]["parents"][0] == parentalid]
+        allCDSsorted = sorted(allCDS, key = lambda x : self.annotations.annotations[x]["start"])
+        genesequence = ""
+        for cds in allCDSsorted:
+            start=self.annotations.annotations[cds]["start"]
+            end=self.annotations.annotations[cds]["end"]
+            if cds == gffId:
+                startCDS = len(genesequence)+1
+                startIndex = startCDS + position - start -1 if startCDS + position - start >= 3 else 2
+            genesequence+=self.fasta.data[chromosome][start-1:end]
+        assert len(genesequence)%3 == 0
+        endIndex=startIndex+len(reference) if startIndex+len(reference) <= len(genesequence)-2 else len(genesequence)-2
         strand=self.annotations.annotations[gffId]['strand']
-        startCDS=self.annotations.annotations[gffId]['start']
-        endCDS=self.annotations.annotations[gffId]['end']
-        startIndex=position-1
-        endIndex=startIndex+len(reference)
         windowBefore=2+Config.options["protWindowBefore"]*3
         windowAfter=2+Config.options["protWindowAfter"]*3
 
@@ -116,21 +135,27 @@ class Connection(object):
         # knowing that the window is +/- windows bases after mutation
         #Translation starts at start of feature
         if strand=="+":
-            shiftBefore=min(startIndex-startCDS+1, windowBefore)
-            shiftAfter=min(endCDS-endIndex, windowAfter)
-            phase=-(startIndex-shiftBefore-(startCDS-1+phase))%3
+            if windowBefore > startIndex or windowAfter > len(genesequence)-endIndex:
+                print("Protein window too wide for CDS %s (%s:%s). Changing to maximal window..."%(gffId, chromosome, position), file=stderr)
+            shiftBefore=min(startIndex, windowBefore)
+            shiftAfter=min(len(genesequence)-endIndex, windowAfter)
+            aaPos=round(startIndex/3)+1
+            phase=-(startIndex-shiftBefore)%3
         #Translation starts at end of feature
         elif strand=="-":
-            shiftBefore=min(startIndex-startCDS+1, windowAfter)
-            shiftAfter=min(endCDS-endIndex, windowBefore)
-            phase=(endIndex+shiftAfter-phase-endCDS)%3
+            if windowAfter > startIndex or windowBefore > len(genesequence)-endIndex:
+                print("Protein window too wide for CDS %s (%s:%s). Changing to maximal window..."%(gffId, chromosome, position), file=stderr)
+            shiftBefore=min(startIndex, windowAfter)
+            shiftAfter=min(len(genesequence)-endIndex, windowBefore)
+            aaPos=round((len(genesequence)-endIndex)/3)+1
+            phase=-(len(genesequence)-(endIndex+shiftAfter))%3
         
-        oldCDS=self.fasta.data[chromosome][startIndex-shiftBefore:endIndex+shiftAfter]
+        oldCDS=genesequence[startIndex-shiftBefore:endIndex+shiftAfter]
         oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
 
-        newCDS=self.fasta.data[chromosome][startIndex-shiftBefore:startIndex]+mutation+self.fasta.data[chromosome][endIndex:endIndex+shiftAfter]
+        newCDS=genesequence[startIndex-shiftBefore:startIndex]+mutation+genesequence[endIndex:endIndex+shiftAfter]
         newProt=self.fasta.translate_CDS(newCDS, strand, phase)
-        aaChanges=[oldCDS, oldProt, newCDS, newProt]
+        aaChanges=[[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, newCDS, newProt]
         return aaChanges
 
     def print_line(self, variantId=None, altIndex=0, sep=";"):
@@ -163,11 +188,13 @@ class Connection(object):
                 ":".join(f'{props:03}' for props in self.variants.variants[variantId]["props"][altIndex])]
             content+=["NA"]*len(self.variants.samples)
 
+            aapos=[]
             cdsref=[]
             aaref=[]
             cdsalts=[]
             aaalts=[]
             for gffId in self.variants.variants[variantId]["cdsRef"]:
+                aapos.append("/".join(str(pos) for pos in self.variants.variants[variantId]["aaPos"][gffId]))
                 cdsref.append(self.variants.variants[variantId]["cdsRef"][gffId]+" ("+gffId+")")
                 aaref.append(self.variants.variants[variantId]["aaRef"][gffId])
                 cdsalts.append(self.variants.variants[variantId]["cdsAlts"][gffId][altIndex])
@@ -176,7 +203,7 @@ class Connection(object):
             if len(self.variants.variants[variantId]["cdsRef"]) > 0: #There is a feature at least
                 content[5]=":".join(cdsref) #the same cds ref in different features
                 content[6]=":".join(cdsalts) #different cds alt
-                content[7]=":".join(aaref) #the same aa ref in different features
+                content[7]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaref, aapos))+")" #the same aa ref in different features
                 content[8]=":".join(aaalts) #different aa alt
             annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in self.variants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
             content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
@@ -192,17 +219,17 @@ class Connection(object):
         variantId (str) : Unique identifier of the variant
 
         """
-        chr = self.variants.variants[variantId]["chromosome"]
+        chrom = self.variants.variants[variantId]["chromosome"]
         pos = self.variants.variants[variantId]["position"]
         seqLength = len(self.variants.variants[variantId]["ref"])
         posBefore = pos - Config.options["nuclWindowBefore"]
         posAfter = pos + Config.options["nuclWindowAfter"]
-        if posBefore < 1 or posAfter + seqLength > len(self.fasta.data[chr]):
-            print("Window too wide for variant %s (%s:%s)"%(variantId, chr, pos), file=stderr)
+        if posBefore < 1 or posAfter + seqLength > len(self.fasta.data[chrom]):
+            print("DNA window too wide for variant %s (%s:%s). Changing to maximal window..."%(variantId, chrom, pos), file=stderr)
             posBefore = 1 if posBefore < 1 else posBefore
-            posAfter = -2 - seqLength if posAfter + seqLength > len(self.fasta.data[chr]) else posAfter
+            posAfter = -2 - seqLength if posAfter + seqLength > len(self.fasta.data[chrom]) else posAfter
 
-        self.variants.variants[variantId]["refwindow"]=[self.fasta.data[chr][posBefore-1:pos-1],self.fasta.data[chr][pos+seqLength-1:posAfter+seqLength-1]]
+        self.variants.variants[variantId]["refwindow"]=[self.fasta.data[chrom][posBefore-1:pos-1],self.fasta.data[chrom][pos+seqLength-1:posAfter+seqLength-1]]
         
     def load_features(self, variantId):
         """
@@ -220,10 +247,25 @@ class Connection(object):
                 aaDiff=self.get_aa_from_mutation(self.variants.variants[variantId]["chromosome"], 
                 self.variants.variants[variantId]["position"], 
                 self.variants.variants[variantId]["ref"], alt, gffId)
-                self.variants.variants[variantId]["cdsAlts"][gffId].append(aaDiff[2])
-                self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[3])
-            self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[1]
-            self.variants.variants[variantId]["cdsRef"][gffId]=aaDiff[0]
+                self.variants.variants[variantId]["cdsAlts"][gffId].append(aaDiff[3])
+                self.variants.variants[variantId]["aaAlts"][gffId].append(aaDiff[4])
+            self.variants.variants[variantId]["aaPos"][gffId]=aaDiff[0]
+            self.variants.variants[variantId]["cdsRef"][gffId]=aaDiff[1]
+            self.variants.variants[variantId]["aaRef"][gffId]=aaDiff[2]
+    
+    def define_category(self, variantId):
+        """
+        Determine of the variant is a SNP or INDEL and add genomic location
+
+        variantId (str) : Unique identifier of the variant
+
+        """
+        if all(len(self.variants.variants[variantId]["ref"]) == len(alt) for alt in self.variants.variants[variantId]["alts"]):
+            maincategory = "SNP"
+        else:
+            maincategory = "INDEL"
+        subcategories = set([self.annotations.annotations[gffId]['annotation'] for gffId in self.variants.variants[variantId]["features"]])
+        self.variants.variants[variantId]["category"] = ",".join([maincategory]+[subcategory for subcategory in subcategories])
 
     def get_all_alts(self, fixed, allVariants, allRegions, csv, filteredvcf):
         """
@@ -245,8 +287,10 @@ class Connection(object):
         vcfcorrespondingline=self.variants.headerlinenumber-1
         #Body
         for key in sortedKeys:
-            gffIds=self.map_GFFid_VCFpos(self.variants.variants[key]["chromosome"], self.variants.variants[key]["position"])
-            self.variants.variants[key]["features"]=gffIds
+            endPosition = self.variants.variants[key]["position"] + len(self.variants.variants[key]["ref"]) - 1
+            gffIds=self.map_GFFid_VCFpos(self.variants.variants[key]["chromosome"], self.variants.variants[key]["position"], endPosition)
+            self.variants.variants[key]["features"] = gffIds
+            self.define_category(key)
             if len(self.variants.variants[key]["features"]) == 0 and allRegions is False:
                 continue #No feature-surrounded variants
             self.window_sequence(key)

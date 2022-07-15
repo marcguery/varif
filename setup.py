@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="varif",
-    version="0.2.0",
+    version="0.2.1",
     author="Marc-Antoine Guery",
     author_email="marcantoine.guery@gmail.com",
     description="A variant filtering and annotating package",

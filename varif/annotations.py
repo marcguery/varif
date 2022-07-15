@@ -6,16 +6,29 @@ class Annotations(object):
     def __init__(self):
         """
         annotations (dict) : Key (ID of Annotation), value (Info of Annotation)
+        genesID (dict) : Key (ID of gene annotation), value
+                            (type of subfeatures: mRNA, exon, CDS...) containing their IDs
         positions (dict) : Key (Chromosome), value (Features coordinates and ID)
-        ranks (list) : Ranks of fileds order as in GFF3 specs
+        index (dict) : For each chromosome (key), the value is a list with 
+                            first element which is first coordinate of features,
+                            second element which is a dict of features (value) with same last coordinate (key)
+        ranks (list) : Ranks of fields order as in GFF3 specs
 
         """
         self.annotations={}
+        self.genesID={}
         self.positions={}
         self.index={}
         self.ranks=range(0,9)
     
     def index_gff(self):
+        """
+        Store GFF features by their first coordinate containing groups of the same last coordinate
+
+        return (dict) : For each chromosome (key), the value is a list with 
+                            first element which is first coordinate of features,
+                            second element which is a dict of features (value) with same last coordinate (key)
+        """
         features={}
         for chromosome in self.positions:
             self.positions[chromosome]=sorted(self.positions[chromosome], key=lambda x : x[0])
@@ -68,13 +81,22 @@ class Annotations(object):
             #Filling descriptions with those of parents
             if annotation.parents!=[]:
                 descs=[]
+                mID=None
                 for parent in annotation.parents:
                     if parent in self.annotations:
                         descs.append(self.annotations[parent]['description'])
+                        if mID is not None and self.annotations[parent]['masterid'] != mID:
+                            print("Too much parents (%s, %s) for (%s)"%(mID[0], self.annotations[parent]['masterid'], annotation.id), file = stderr)
+                        else:
+                            mID = self.annotations[parent]['masterid']
                     else:
                         print("Orphan entry (%s) in the GFF file missing parent (%s)"%(annotation.id, parent), file = stderr)
                         raise(Exception)
                 annotation.description=",".join(descs)
+                annotation.masterid = mID
+                self.genesID[mID].setdefault(annotation.annotation, []).append(annotation.id)
+            else:
+                self.genesID[annotation.id]={}
             #Storing annotations
             self.annotations[annotation.id]={
                 'chromosome':annotation.chromosome,
@@ -84,6 +106,7 @@ class Annotations(object):
                 'phase':annotation.phase,
                 'annotation':annotation.annotation,
                 'parents':annotation.parents,
+                'masterid':annotation.masterid,
                 'description':annotation.description
             }
             #Generating feature coordinates

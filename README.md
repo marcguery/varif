@@ -46,9 +46,9 @@ A GFF3 file formatted as described in `ensembl` specifications at [https://www.e
 Supported types of features are:
 
 - *gene* or containing the keyword 'gene' (*ncRNA_gene*, *protein_coding_gene*, *pseudogene*, ...)
-  **Used to annotate the variants**
+  **Used to annotate the variants**.
 - *CDS*
-  **Used to translate sequences affected by the variants**
+  **Used to translate sequences affected by the variants**.
 
 ## FASTA (`-fasta`)
 
@@ -70,22 +70,22 @@ The output CSV file separated by semicolons contains:
 
 - Chromosome: The chromosome name
 - Position: The starting position of the variant
-- Type: The type of variant (SNP, INDEL...)
+- Type: The type of variant (SNP, INDEL...) followed by its genomic location
 - Ref: The reference sequence +/- up and downstream sequences (separated by '|')
 - Alt: The alternate sequence
 - CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier\*
 - CDSalt: The windowed CDS alternate sequences including the variant\*
-- AAref: The amino acid sequence resulting from the windowed reference sequence\*
+- AAref: The amino acid sequence resulting from the windowed reference sequence followed by the codon position\*
 - AAalt: The amino acid sequence resulting from the windowed alternate sequences\*
 - Annotation: The annotation described in the GFF file followed by the gene identifier\*\*
-- Score: The score of the variant (see [Process](#process))
+- Score: The score of the variant (see [Variant scores](#scores))
 - Sample#1: Proportion of alternate allele for sample 1
 - ...
 - Sample#n: Proportion of alternate allele for sample n
 
 \*: Applies for CDS regions, otherwise *NA*
 
-\*\*: Applies for CDS and intronic regions, otherwise *NA*
+\*\*: Applies for transcribed regions, otherwise *NA*
 
 # Filters
 
@@ -95,32 +95,32 @@ The variant allele frequencies are calculated only if the sample allele depth (t
 
 ## Control groups
 
-It is possible to separate samples into 2 groups (positive and negative control groups) that are used to determine which variant is differentially expressed between the 2 groups based on the allele frequencies. By default, all samples belong to the same group which implies that the positive and negative control groups are the same. The option `--control` can be used to specify the negative control group with a comma separated list of sample identifiers corresponding to their order in the VCF header, starting by 1. The relationship between the 2 groups is symmetrical, meaning that variants detected in both groups can be considered differentially expressed.
+It is possible to separate samples into 2 groups (positive and negative control groups) that are used to determine which variant is differentially expressed between the 2 groups based on the allele frequencies. By default, all samples belong to the same group which implies that the positive and negative control groups are the same. The option `--control` can be used to specify the negative control group with a comma separated list of sample identifiers corresponding to their order in the VCF header, starting by 1. The relationship between the 2 groups is symmetrical, meaning that variants detected in both groups are candidates for being considered differentially expressed.
 
 ## Allele frequencies
 
-There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and minRAF to 0.2.
+There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and maxRAF to 0.2.
 
-For each variant at a chromosomal location, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
+For each variant at a chromosomal location and for each sample, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
 
 ***VAF*** = (*variant AD*) / (*other variants AD* + *reference AD*)
 
-If the VAF is above minAAF, it should then be considered a true variant, while if the VAF is below minRAF, it should be considered a true reference.
+If the VAF is above minAAF, it should then be considered a true variant, while if the VAF is below maxRAF, it should be considered a true reference.
 
 The combination of VAFs are used to classify variants that are:
 
 - Differentially distributed between positive and negative control samples:
-  At least one VAF of the **negative** control samples is below or equal to maxRAF (true reference) and at least one VAF of the **positive** control samples is above or equal to minAAF (true variant).
+  At least one VAF of the **negative** control samples is a true reference (below or equal to maxRAF) and at least one VAF of the **positive** control samples is a true variant (above or equal to minAAF).
   The rule applies symmetrically, when at least one VAF of the **positive** control samples is a true reference and at least one VAF of the **negative** control samples is a true variant.
 - Fixed in the population:
   All VAFs of the samples are above or equal to minAAF or below or equal to maxRAF. Either the option `--all-variants` or `--fixed` will show these variants.
-- Not differentially distributed among samples, for all other cases. Only the option `--all-variants` will show these variants.
+- Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these variants while the option `--best-variants` will omit them.
 
 ## Specific regions
 
 By default, all genomic regions are shown with the option `--all-regions`. However, variants outside a gene (as annotated in the GFF file) can be removed from the output with the option `--gene-regions`. Variants are shown if their position in the VCF file are inside a gene (hence INDELs staring just before a gene will not be selected).
 
-## Variant scores
+## <a name="scores"></a>Variant scores
 
 The variant score displayed at the Score column of the CSV file is made of four different percentages separated by a ':' corresponding respectively to:
 
@@ -147,12 +147,12 @@ Variant inside genes are annotated given the gene annotation available in the GF
 
 ## Automatic translation
 
-When the variant is inside a CDS (i. e. its first position is inside a CDS), this feature will predict the protein sequence affected by the whole variant plus amino acids before and after (in the direction of the translation) included in a chosen window with `--prot-window-before` and `--prot-window-after` options.
+When the variant is inside a CDS, this feature will predict the protein sequence affected by the whole variant plus amino acids before and after (in the direction of the translation) included in a chosen window with `--prot-window-before` and `--prot-window-after` options. The position of the codon is then calculated from their rank from the beginning of the predicted protein and shown in the AAref columns of the CSV file. The codon position is associated with the total number of codons, including the stop codon.
 The translation will stop if:
 
 - The window is completely translated
 
-- The end of the CDS is reached
+- The end of the predicted protein is reached
 
 - A stop codon is obtained
 

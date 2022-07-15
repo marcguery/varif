@@ -122,6 +122,7 @@ class Variants(object):
                 "refwindow":variant.refwindow,
                 "ratios":variant.ratios,
                 "features":[],
+                "aaPos":{},
                 "cdsRef":{}, "cdsAlts":{},
                 "aaRef":{}, "aaAlts":{},
                 "vcfline":vcfline}

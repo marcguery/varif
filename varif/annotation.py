@@ -14,6 +14,7 @@ class Annotation(object):
         phase (str) : Start of codon among '0', '1', '2' (CDS only) and '.'
         misc (dict) : GFF3 INFO splitted by category; 'ID=' is mandatory
         id (str) : Unique ID of the feature
+        masterid (str) : ID of the highest feature (genes in general)
         parents (str) : Parent(s) of the feature
         description (str) : Annotated function of the feature
 
@@ -28,5 +29,6 @@ class Annotation(object):
         misc=gffLine[ranks[8]].strip("\n").split(";")
         self.misc={info.split("=")[0]:info.split("=")[1] for info in misc}
         self.id=self.misc["ID"]
+        self.masterid=self.id
         self.parents=self.misc["Parent"].split(",") if "Parent" in self.misc else []
         self.description=self.misc["description"] if "description" in self.misc else ""
