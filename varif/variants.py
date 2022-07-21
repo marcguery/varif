@@ -122,8 +122,10 @@ class Variants(object):
                 "refwindow":variant.refwindow,
                 "ratios":variant.ratios,
                 "features":[],
-                "aaPos":{},
+                "aaPosRef":{},
+                "aaPosAlts":{},
                 "cdsRef":{}, "cdsAlts":{},
                 "aaRef":{}, "aaAlts":{},
-                "vcfline":vcfline}
+                "vcfline":vcfline,
+                "log":variant.log}
             n+=1

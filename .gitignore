@@ -1,5 +1,4 @@
-Variants.*
 */__pycache__/*
 build/*
-dist/*
 *egg*/*
+.vscode/*

@@ -75,8 +75,8 @@ The output CSV file separated by semicolons contains:
 - Alt: The alternate sequence
 - CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier\*
 - CDSalt: The windowed CDS alternate sequences including the variant\*
-- AAref: The amino acid sequence resulting from the windowed reference sequence followed by the codon position\*
-- AAalt: The amino acid sequence resulting from the windowed alternate sequences\*
+- AAref: The amino acids resulting from the windowed reference sequence followed by the codon position\*
+- AAalt: The amino acids resulting from the windowed alternate sequences followed by the codon position\*
 - Annotation: The annotation described in the GFF file followed by the gene identifier\*\*
 - Score: The score of the variant (see [Variant scores](#scores))
 - Sample#1: Proportion of alternate allele for sample 1
@@ -141,20 +141,37 @@ Percentages within each group do not add up to 100 when there are samples that h
 
 The genomic sequences that are upstream or downstream of the reference allele can be shown in the Ref column of the output CSV file with respectively `--nucl-window-before` and `--nucl-window-after` .
 
-## Multiple features
+## Overlapping features
 
-Variant inside genes are annotated given the gene annotation available in the GFF file. Several gene annotations are separated by a ':' , as well as the associated CDS and amino acid sequences when the variant is inside a CDS.
+Variant inside features are annotated given the feature type available in the third column of the GFF file. If the feature type contains the keyword 'gene', their annotation is saved in the Annotation column of the CSV file. If the feature type is 'CDS', the automatic translation will be realised and the CDS and amino acid sequences associated with the CDS annotation will be added in the CDSref, CDSalt, AAref and AAalt columns of the CSV file.
+All the feature types detected are stored after the variant type in the Type column of the CSV file.
 
 ## Automatic translation
 
-When the variant is inside a CDS, this feature will predict the protein sequence affected by the whole variant plus amino acids before and after (in the direction of the translation) included in a chosen window with `--prot-window-before` and `--prot-window-after` options. The position of the codon is then calculated from their rank from the beginning of the predicted protein and shown in the AAref columns of the CSV file. The codon position is associated with the total number of codons, including the stop codon.
-The translation will stop if:
+When the variant is inside a CDS, `varif` will predict the new CDS sequence affected by the variant by replacing the reference sequence by the mutation. However, knowing where to start the CDS can be difficult in the case of a mutation affecting the very first codon of the CDS. In that matter, several further modifications are added to produce the most biologically relevant CDS. Bases from the upstream sequence (before the first codon) are added to complement the mutated CDS it it lacks the very first bases so that the initial and mutated have the same size and their resulting protein can be easilly compared. Similarly, bases from the mutation belonging to the upstream sequence are removed from the mutated CDS to match the initial CDS size.
 
-- The window is completely translated
+More generally:
 
-- The end of the predicted protein is reached
+-  When the mutation is shorter than the reference sequence:
+  - If the very first bases of the initial CDS are not recovered after adding the mutation, bases are added from the upstream sequence to lead to a mutated CDS of the same size than the initial one.
+  - Otherwise, bases from the downstream sequence are added to match the initial CDS size
+- When the mutation is longer than the reference sequence:
+  - Bases located in the upstream region of the CDS are removed
+  - All other bases from the mutation are kept (including those from the downstream region) and bases from the downstream sequence after the mutation are added to make the length of the mutated CDS a multiple of 3
 
-- A stop codon is obtained
+Amino acids affeced by the reference and alternate sequence are obtained by translating the initial and mutated CDS respectively. Additional codons can be added in a chosen window with `--prot-window-before` and `--prot-window-after` options; limited to the first and last codon (or when a stop codon is obtained). The position of the codon is then calculated from their rank from the beginning of the initial and mutated CDS and shown in the AAref and AAalt columns of the CSV file. The codon positions are associated with the total number of codons in each CDS, including the stop codon.
+
+# Limitations
+
+## Multi-variant sample
+
+As `varif` considers only one variant at a time for each sample which can lead to the wrong mutated CDS being translated.
+
+## CDS prediction
+
+Since `varif` does not consider bases from a mutation if they reach the upstream sequence (before the first codon), a longer mutated CDS starting before the initial first codon could be missed.
+
+Similarly, the end of the mutated CDS is not precisely determined but estimated by the addition of enough bases to reach at least the initial CDS size or a multiple of 3.
 
 # Examples
 
@@ -178,7 +195,7 @@ The translation will stop if:
        --filtered-vcf filtered-variants.vcf
    ```
 
-3. Save variants falling in a gene and differentially expressed (positive VAF) with protein sequences including 5 amino acids before and after the variant.
+3. Save variants falling in a gene and differentially expressed (all samples vs all other samples) with protein sequences including 5 amino acids before and after the variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
@@ -189,5 +206,15 @@ The translation will stop if:
        --filtered-vcf filtered-variants.vcf
    ```
 
-   
+4. Save variants falling in a gene and differentially expressed (3rd & 4th samples in VCF file header vs all other samples) with protein sequences including 5 amino acids before and after the variant.
+
+   ```bash
+   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --no-fixed --best-variants --gene-regions \
+       --control 3,4 \
+       --prot-window-before 5 --prot-window-after 5 \
+       --filtered-csv filtered-variants.csv \
+       --filtered-vcf filtered-variants.vcf
+   ```
 

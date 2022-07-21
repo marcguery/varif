@@ -22,6 +22,7 @@ class Variant(object):
         props (list) : True var and true ref prct of + and - control groups for each alt
         types (list) : Type of each variant among differential, fixed and ambiguous
         category (str) : Type of variant : 'SNP' or 'INDEL' and annotation if available
+        log (list) : Log of the full variant (VCF line) and of each alt
 
         """
         self.config=Config
@@ -43,7 +44,8 @@ class Variant(object):
         self.ratios={}
         self.props=[]
         self.types=[]
-        self.category=""       
+        self.category=""   
+        self.log=["",[]]    
     
     def calculate_ratios(self, mindepth):
         """

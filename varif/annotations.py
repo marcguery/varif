@@ -1,3 +1,4 @@
+import math
 from sys import stderr
 from .annotation import Annotation
 
@@ -117,3 +118,53 @@ class Annotations(object):
             n+=1
         #Feature coordinates need to be sorted by start then end for variant mapping
         self.index=self.index_gff()
+    
+    def map_GFFid_VCFpos(self, chromosome, startPosition, endPosition):
+        """
+        Retrieve all GFF features surrounding the variant
+
+        chromosome (str) : Name of chromosome
+        startPosition (int) : First position of variant
+        endPosition (int) : Last position of variant
+
+        return (list) : Identifiers of GFF features retrieved
+        """
+        assert endPosition >= startPosition
+        #This is a half-cut search
+        finished=False
+        #Maximum index of the feature to search
+        maxValue=len(self.index[chromosome])-2
+        #Minimum index of the feature to search
+        minValue=0
+        #Half of those
+        currindex=math.floor(maxValue+minValue/2)
+        identifiers=[]
+        matchIndexes=[]
+        #Finding a random feature
+        while not finished:
+            #Minimum position of the feature checked
+            mini = self.index[chromosome][currindex][0]
+            #Maximum position of the feature checked
+            maxi = max(list(self.index[chromosome][currindex][1].keys()))
+            #The feature surrounds the variant
+            if startPosition >= mini and startPosition <= maxi:
+                finished=True
+            #The variant is in upper half of the cut
+            elif startPosition > maxi and currindex < maxValue:
+                minValue=currindex+1
+                currindex=math.ceil((maxValue+currindex)/2)
+            #The variant is in lower half of the cut
+            elif startPosition < mini and currindex > minValue:
+                maxValue=currindex
+                currindex=math.floor((currindex+minValue)/2)
+            #The variant is not surrouded by a feature
+            else:
+                finished=True
+        while currindex < len(self.index[chromosome])-1 and startPosition <= maxi and endPosition >= mini:
+            for endFeature in self.index[chromosome][currindex][1]:
+                if startPosition <= endFeature:
+                    identifiers.extend(self.index[chromosome][currindex][1][endFeature])
+            currindex += 1
+            mini = self.index[chromosome][currindex][0]
+            maxi = max(list(self.index[chromosome][currindex][1].keys()))
+        return identifiers
