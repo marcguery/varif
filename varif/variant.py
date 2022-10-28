@@ -11,7 +11,7 @@ class Variant(object):
         ranks (list) : Order of fields as in VCF specs
         samples (list) : Name of samples 
         samplesRanks (list) : Order of samples given in argument
-        refSamples (list) : Names of negative control samples
+        refSamples (list) : Names of grouped samples
 
         chromosome (str) : Name of chromosome
         position (str) : Position of variant
@@ -19,7 +19,7 @@ class Variant(object):
         alts (list) : Alternate sequences at position
         counts (dict) : Key (sample name), value (AD count for ref and alts)
         ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
-        props (list) : True var and true ref prct of + and - control groups for each alt
+        props (list) : True var and true ref prct of both groups for each alt
         types (list) : Type of each variant among differential, fixed and ambiguous
         category (str) : Type of variant : 'SNP' or 'INDEL' and annotation if available
         log (list) : Log of the full variant (VCF line) and of each alt
@@ -83,14 +83,16 @@ class Variant(object):
         maxraf=self.config.options["maxraf"]
         minaaf=1-maxraf if minaaf is None else minaaf
 
-        try:
-            assert 0 <= maxraf <= 1 and 0 <= minaaf <= 1
-            assert maxraf <= minaaf
-        except AssertionError:
-            err="Alternate AF (input:%s) and Reference AF (input:%s)"%(minaaf, maxraf)
-            err+=" should be between 0 and 1"
-            err+=" and Reference AF should be <= to Alternate AF."
-            raise ValueError(err)
+        #Maximal proportion of missing (NA or mixed AF) in both groups
+        maxmissing = self.config.options["maxMissing"]
+        #Minimal proportion of samples that are called true alt (differential groups only)
+        minvariants = self.config.options["minVariants"]
+        #Maximal ratio of the least number of alt samples over the other group alt samples (differential groups only)
+        ratiovariantdiff = self.config.options["maxSimilarity"]
+        assert 0 <= maxraf <= 1 and 0 <= minaaf <= 1, "Alternate AF (input:%s) and Reference AF (input:%s) must be proportions"%(minaaf, maxraf)
+        assert maxraf <= minaaf, "Reference AF should be <= to Alternate AF"
+        assert 0 <= maxmissing <= 1 and 0 <= minvariants <= 1 and 0 <= ratiovariantdiff <= 1, "Group filtering options must be proportions"
+        
         for rank in range(1,len(self.alts)+1):
             ratioRefRank=[self.ratios[sample][rank] for sample in self.refSamples]
             ratioAltRank=[self.ratios[sample][rank] for sample in self.altSamples]
@@ -108,17 +110,27 @@ class Variant(object):
                 minaltratio=np.nanmin(ratioAltRank)
                 maxaltratio=np.nanmax(ratioAltRank)
 
-            numaltsupp=round(100*len([supptominaaf for supptominaaf in ratioAltRank if supptominaaf>=minaaf])/len(ratioAltRank))
-            numaltinfe=round(100*len([infetomaxraf for infetomaxraf in ratioAltRank if infetomaxraf<=maxraf])/len(ratioAltRank))
-            numrefsupp=round(100*len([supptominaaf for supptominaaf in ratioRefRank if supptominaaf>=minaaf])/len(ratioRefRank))
-            numrefinfe=round(100*len([infetomaxraf for infetomaxraf in ratioRefRank if infetomaxraf<=maxraf])/len(ratioRefRank))
-            self.props.append([numaltsupp, numaltinfe, numrefsupp, numrefinfe])
+            numaltsupp=len([supptominaaf for supptominaaf in ratioAltRank if supptominaaf>=minaaf])/len(ratioAltRank)
+            numaltinfe=len([infetomaxraf for infetomaxraf in ratioAltRank if infetomaxraf<=maxraf])/len(ratioAltRank)
+            numrefsupp=len([supptominaaf for supptominaaf in ratioRefRank if supptominaaf>=minaaf])/len(ratioRefRank)
+            numrefinfe=len([infetomaxraf for infetomaxraf in ratioRefRank if infetomaxraf<=maxraf])/len(ratioRefRank)
+            self.props.append([round(100*numaltsupp), round(100*numaltinfe), round(100*numrefsupp), round(100*numrefinfe)])
+
+            missingref = 1 - numrefinfe - numrefsupp
+            missingalt = 1 - numaltinfe - numaltsupp
             #fixed alternate or reference
             if minrefratio >= minaaf and minaltratio >= minaaf or (maxrefratio <= maxraf and maxaltratio <= maxraf):
-                self.types.append("fixed")
+                if max(missingref, missingalt) <= maxmissing:
+                    self.types.append("fixed")
+                else:
+                    self.types.append("ambiguous")
             #True Alt
             elif minrefratio <= maxraf and maxaltratio >= minaaf or (minaltratio <= maxraf and maxrefratio >= minaaf):
-                self.types.append("differential")
+                propvariantdiff = min(numrefsupp,numaltsupp) / max(numrefsupp,numaltsupp)
+                if max(missingref, missingalt) <= maxmissing and max(numrefsupp,numaltsupp) >= minvariants and propvariantdiff <= ratiovariantdiff:
+                    self.types.append("differential")
+                else:
+                    self.types.append("ambiguous")
             #Ambiguous variants
             else:
                 self.types.append("ambiguous")

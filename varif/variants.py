@@ -12,8 +12,8 @@ class Variants(object):
         vcffile (list) : The list of lines in the input VCF file
         headerlinenumber : The line number of the VCF file corresponding to the end of the header
         samples (list) : Name of samples
-        refRanks (list) : Rank of each negative control sample (starting at 1)
-        refSamples (list) : Name of each negative control sample
+        refRanks (list) : Rank of each grouped sample (starting at 1)
+        refSamples (list) : Name of each grouped sample
         ranks (list) : Rank of each field in VCF
 
         """
@@ -30,13 +30,13 @@ class Variants(object):
         refRanksraw=Config.options["refRanks"]
         self.refRanks=[]
         for arg in refRanksraw.split(","):
-            #In the case there is no control samples registered:
+            #In the case there is no grouped samples registered:
             if arg == "" and len(refRanksraw.split(",")) == 1:
                 break
             try:
                 self.refRanks.append(int(arg.strip("")))
             except Exception as err:
-                print("Bad format of the control sample numbers", file = stderr)
+                print("Bad format of the grouped sample numbers", file = stderr)
                 print(err, file = stderr)
         self.refSamples=[]
 
@@ -62,7 +62,8 @@ class Variants(object):
         header (list) : Name of fields in the actual VCF
         """
         try:
-            assert set(self.vcfHeaderExpected).difference(set(header))==set()
+            assert set(self.vcfHeaderExpected).difference(set(header))==set(), "Bad VCF header"
+            assert min(self.refRanks) >= 1 and max(self.refRanks) <= len(header)-len(self.vcfHeaderExpected), "Wrong sample ID"
             #Reset vcfHeaderSorted with actual header
             self.vcfHeaderSorted={colname.strip("\n"):i for i,colname in enumerate(header)}
             #Assuming that samples are at the end
@@ -75,8 +76,8 @@ class Variants(object):
                 n-=1
                 colname=header[n]
         except Exception as err:
-            print("Bad VCF header", file = stderr)
             print(err, file = stderr)
+            raise(err)
 
     def load_variants_from_VCF(self, vcf):
         """
@@ -98,7 +99,7 @@ class Variants(object):
         self.check_vcf_header(headerline.split("\t"))
         samplesRanks=[self.vcfHeaderSorted[sample] for sample in self.samples]
         if len(self.refSamples) > 0:
-            print("Control samples are : %s"%(", ".join(self.refSamples)))
+            print("Grouped samples are : %s"%(", ".join(self.refSamples)))
         #Storing variants
         while n < len(self.vcffile):
             variant=Variant(self.vcffile[n], self.ranks, self.samples, samplesRanks, self.refSamples)

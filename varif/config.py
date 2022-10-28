@@ -61,9 +61,20 @@ class Config(object):
         parser.add_argument('--ratio-no-alt', dest='maxraf', type=float, default=0.2,
         metavar="RAF",
         help='Maximal ratio of alt/total depth to call it true ref')
-        parser.add_argument('--control', dest='refRanks', type=str, default="",
+        parser.add_argument('--group', dest='refRanks', type=str, default="",
         metavar="IDi,...,IDn",
-        help='Comma-separated list of negative control sample rank (order in VCF file, starting with 1)')
+        help='Compare samples (order in VCF, starting with 1) of this group versus all the other samples')
+
+
+        parser.add_argument('--max-missing', dest='maxMissing', type=float, default=1,
+        metavar="PROP",
+        help='Maximal proportion of missing genotypes (low depth or mixed AF) in each group')
+        parser.add_argument('--max-similarity', dest='maxSimilarity', type=float, default=1,
+        metavar="PROP",
+        help='Maximal ratio of min(mut samples)/max(mut samples) between groups (non fixed variant)')
+        parser.add_argument('--min-variants', dest='minVariants', type=float, default=0,
+        metavar="PROP",
+        help='Minimal proportion of samples that are mutated in the variant group (non fixed variant)')
 
         parser.add_argument('--filtered-csv', dest='csv', type=str, default=None,
         metavar="FILE",
