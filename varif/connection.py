@@ -30,7 +30,7 @@ class Connection(object):
     
     @property
     def version(self):
-        return "0.2.3"
+        return "0.2.4"
     
     def check_arguments(self, arguments):
         if Config.options["version"]:

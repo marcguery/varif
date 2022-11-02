@@ -63,7 +63,8 @@ class Variants(object):
         """
         try:
             assert set(self.vcfHeaderExpected).difference(set(header))==set(), "Bad VCF header"
-            assert min(self.refRanks) >= 1 and max(self.refRanks) <= len(header)-len(self.vcfHeaderExpected), "Wrong sample ID"
+            if self.refRanks != []:
+                assert min(self.refRanks) >= 1 and max(self.refRanks) <= len(header)-len(self.vcfHeaderExpected), "Wrong sample ID"
             #Reset vcfHeaderSorted with actual header
             self.vcfHeaderSorted={colname.strip("\n"):i for i,colname in enumerate(header)}
             #Assuming that samples are at the end
