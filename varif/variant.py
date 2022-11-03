@@ -4,19 +4,25 @@ from .config import Config
 
 class Variant(object):
     """A parsed line of a VCF, requiring AD for each sample."""
-    def __init__(self, vcfLine, ranks, samples, samplesRanks, refSamples):
+    
+    def __init__(self, vcfLine, ranks, samples, samplesRanks, group1, group2):
         """
         Arguments:
         vcfLine (str) : Raw VCF line
         ranks (list) : Order of fields as in VCF specs
-        samples (list) : Name of samples 
+        samples (list) : Names of samples 
         samplesRanks (list) : Order of samples given in argument
-        refSamples (list) : Names of grouped samples
+        group1 (list) : Names of samples in first group of the comparison
+        group2 (list) : Names of samples in second group of the comparison
 
+        config (Config) : Existing configuration loaded initially by varif
         chromosome (str) : Name of chromosome
         position (str) : Position of variant
         ref (str) : Reference sequence of variant starting at position
+        refwindow (list) : Bases before and after the reference sequence indicated in the VCF file
         alts (list) : Alternate sequences at position
+        group1 (list) : Names of samples in first group of the comparison
+        group2 (list) : Names of samples in second group of the comparison
         counts (dict) : Key (sample name), value (AD count for ref and alts)
         ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
         props (list) : True var and true ref prct of both groups for each alt
@@ -25,6 +31,7 @@ class Variant(object):
         log (list) : Log of the full variant (VCF line) and of each alt
 
         """
+        assert (len(group1) == 0 and len(group2)) == 0 or (len(group1) > 0 and len(group2) > 0)
         self.config=Config
         vcfLine=vcfLine.split("\t")
         self.chromosome=vcfLine[ranks[0]]
@@ -38,27 +45,24 @@ class Variant(object):
             if formatSplitted[i] == "AD":
                 adRank=i
                 break
-        self.counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks)}
-        self.refSamples=refSamples if len(refSamples) > 0 else samples
-        self.altSamples=list(set(samples)-set(self.refSamples)) if len(refSamples) > 0 else samples
+        self.group1=group1 if len(group1) > 0 else samples
+        self.group2=group2 if len(group2) > 0 else samples
+        self.counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks) if samples[i] in self.group1+self.group2}
         self.ratios={}
         self.props=[]
         self.types=[]
         self.category=""   
         self.log=["",[]]    
     
-    def calculate_ratios(self, mindepth):
+    def calculate_ratios(self):
         """
         Get the ratio for each alternate count of the variant
-
-        mindepth (int) : Minmal number of reads (REF+ALTs) to
-        calculate allele frequencies, must be integer >= 1
 
         return (dict) : Ratios for each ref and alts
 
         """
         try:
-            mindepth=int(mindepth)
+            mindepth=int(self.config.options["mindepth"])
         except ValueError:
             raise ValueError("Argument 'mindepth' should be an integer, not '%s'"%mindepth)
         if mindepth < 1:
@@ -94,40 +98,41 @@ class Variant(object):
         assert 0 <= maxmissing <= 1 and 0 <= minvariants <= 1 and 0 <= ratiovariantdiff <= 1, "Group filtering options must be proportions"
         
         for rank in range(1,len(self.alts)+1):
-            ratioRefRank=[self.ratios[sample][rank] for sample in self.refSamples]
-            ratioAltRank=[self.ratios[sample][rank] for sample in self.altSamples]
+            ratioGroup1Rank=[self.ratios[sample][rank] for sample in self.group1]
+            ratioGroup2Rank=[self.ratios[sample][rank] for sample in self.group2]
             #No sample is above depth
-            if all(np.isnan(ratio) for ratio in ratioRefRank):
-                minrefratio=math.nan
-                maxrefratio=math.nan
+            if all(np.isnan(ratio) for ratio in ratioGroup1Rank):
+                ming1ratio=math.nan
+                maxg1ratio=math.nan
             else:
-                minrefratio=np.nanmin(ratioRefRank)
-                maxrefratio=np.nanmax(ratioRefRank)
-            if all(np.isnan(ratio) for ratio in ratioAltRank):
-                minaltratio=math.nan
-                maxaltratio=math.nan
+                ming1ratio=np.nanmin(ratioGroup1Rank)
+                maxg1ratio=np.nanmax(ratioGroup1Rank)
+            if all(np.isnan(ratio) for ratio in ratioGroup2Rank):
+                ming2ratio=math.nan
+                maxg2ratio=math.nan
             else:
-                minaltratio=np.nanmin(ratioAltRank)
-                maxaltratio=np.nanmax(ratioAltRank)
+                ming2ratio=np.nanmin(ratioGroup2Rank)
+                maxg2ratio=np.nanmax(ratioGroup2Rank)
+            
+            propg1supp=len([supptominaaf for supptominaaf in ratioGroup1Rank if supptominaaf>=minaaf])/len(ratioGroup1Rank)
+            propg1infe=len([infetomaxraf for infetomaxraf in ratioGroup1Rank if infetomaxraf<=maxraf])/len(ratioGroup1Rank)
+            propg2supp=len([supptominaaf for supptominaaf in ratioGroup2Rank if supptominaaf>=minaaf])/len(ratioGroup2Rank)
+            propg2infe=len([infetomaxraf for infetomaxraf in ratioGroup2Rank if infetomaxraf<=maxraf])/len(ratioGroup2Rank)
+            
+            self.props.append([round(100*propg1supp), round(100*propg1infe), round(100*propg2supp), round(100*propg2infe)])
 
-            numaltsupp=len([supptominaaf for supptominaaf in ratioAltRank if supptominaaf>=minaaf])/len(ratioAltRank)
-            numaltinfe=len([infetomaxraf for infetomaxraf in ratioAltRank if infetomaxraf<=maxraf])/len(ratioAltRank)
-            numrefsupp=len([supptominaaf for supptominaaf in ratioRefRank if supptominaaf>=minaaf])/len(ratioRefRank)
-            numrefinfe=len([infetomaxraf for infetomaxraf in ratioRefRank if infetomaxraf<=maxraf])/len(ratioRefRank)
-            self.props.append([round(100*numaltsupp), round(100*numaltinfe), round(100*numrefsupp), round(100*numrefinfe)])
-
-            missingref = 1 - numrefinfe - numrefsupp
-            missingalt = 1 - numaltinfe - numaltsupp
+            missingg1 = 1 - propg1infe - propg1supp
+            missingg2 = 1 - propg2infe - propg2supp
             #fixed alternate or reference
-            if minrefratio >= minaaf and minaltratio >= minaaf or (maxrefratio <= maxraf and maxaltratio <= maxraf):
-                if max(missingref, missingalt) <= maxmissing:
+            if ming1ratio >= minaaf and ming2ratio >= minaaf or (maxg1ratio <= maxraf and maxg2ratio <= maxraf):
+                if max(missingg1, missingg2) <= maxmissing:
                     self.types.append("fixed")
                 else:
                     self.types.append("ambiguous")
             #True Alt
-            elif minrefratio <= maxraf and maxaltratio >= minaaf or (minaltratio <= maxraf and maxrefratio >= minaaf):
-                propvariantdiff = min(numrefsupp,numaltsupp) / max(numrefsupp,numaltsupp)
-                if max(missingref, missingalt) <= maxmissing and max(numrefsupp,numaltsupp) >= minvariants and propvariantdiff <= ratiovariantdiff:
+            elif ming1ratio <= maxraf and maxg2ratio >= minaaf or (ming2ratio <= maxraf and maxg1ratio >= minaaf):
+                propvariantdiff = min(propg1supp,propg2supp) / max(propg1supp,propg2supp)
+                if max(missingg1, missingg2) <= maxmissing and max(propg1supp,propg2supp) >= minvariants and propvariantdiff <= ratiovariantdiff:
                     self.types.append("differential")
                 else:
                     self.types.append("ambiguous")

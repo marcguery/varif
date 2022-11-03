@@ -54,6 +54,10 @@ Supported types of features are:
 
 The FASTA file containing one sequence per chromosome.
 
+## PED (`--ped`)
+
+The optional PED file containing the family membership and parental relationships between samples from the VCF file. This file should be formatted as described in https://zzz.bwh.harvard.edu/plink/data.shtml#ped.
+
 # Summary
 
 Use `varif` to filter and rank variants submitted through a VCF file.
@@ -62,7 +66,7 @@ For each variant in each sample, `varif` will calculate the Variant Alternate Fr
 
 # Output
 
-Variants passing the filters will be sent to the standard output by default or to a VCF file if the option `--filtered-vcf` is set. Additionally, a CSV file containing each individual variant (variants from the same chromosome location are separated) is generated if the option `--filtered-csv` is set.
+Variants passing the filters will be stored in a CSV file (variants from the same chromosome location are separated) generated with the name (without extension) set by the option `--out-filename`. If the option `--output-vcf` is set, the corresponding filtered variants from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).
 
 ## CSV content
 
@@ -95,7 +99,7 @@ The variant allele frequencies are calculated only if the sample allele depth (t
 
 ## Allele frequencies
 
-There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially expressed in the population. By default, minAAF is equal to 0.8 and maxRAF to 0.2.
+There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially present in a population. By default, minAAF is equal to 0.8 and maxRAF to 0.2.
 
 For each variant at a chromosomal location and for each sample, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
 
@@ -103,19 +107,19 @@ For each variant at a chromosomal location and for each sample, the variant alle
 
 If the VAF is above minAAF, the variant is considered a true variant, while if the VAF is below maxRAF, it is considered a true reference. When the VAF is between maxRAF and minAAF, the genotype cannot be called and the variant is mixed.
 
-## Sample groups
+## <a name="groups"></a>Sample groups
 
-It is possible to separate samples into 2 groups that are used to determine which variant is differentially expressed between groups based on allele frequencies. By default, all samples belong to the same group which implies a self-self comparison will be made. The option `--group` can be used to specify samples belonging to one group with a comma separated list of sample identifiers corresponding to their order in the VCF header, starting by 1. The relationship between the 2 groups is symmetrical, meaning that variants detected in either group are candidates for being considered differentially expressed.
+By default, samples are not grouped into subcategories which implies that a self-self comparison will be made to determine which variant is differentially prevalent based on the presence of true variant samples and true reference samples. However, it is possible to separate samples into groups and look for variants differentially present between those groups by providing the option `--comparison` with one of the keywords *families*, *lineages* or *both*. Samples can be grouped either into families, or parental-offspring relationships according to the metadata from the PED file. Variant differential prevalence will be compared in every combination of families and direct parent versus offspring. The relationship between the two groups is symmetrical, meaning that variants detected in either group are candidates for being considered differentially present.
 
-Groups with too many missing genotypes (because of insufficient depth or a mixed variant) can filtered out with `--max-missing` (default 1) which discard variants if both groups have more missing genotypes than the selected proportion.
+Groups with too many missing genotypes (because of insufficient depth or a mixed variant) can be filtered out with `--max-missing` (default 1) which discards variants if one group has more missing genotypes than the selected proportion.
 
 Group-specific variants can be selected with the option `--max-similarity` (default 1) by providing the maximal proportion of the number of mutated samples between the group with less mutated samples over the one with the most mutated samples.
 
-Variants that are too rare can be filtered out by the option `--min-variants` (default 0) which will discard variants that are present in less than this proportion of the number of samples in each group.
+Variants that are too rare can be filtered out by the option `--min-variants` (default 0) which will discard variants that are present in less than this proportion of the number of samples in both group.
 
 The combination of VAFs are used to classify variants that are:
 
-- Differentially distributed between both groups:
+- Differentially distributed between two groups:
   At least one VAF of one group is a true reference (below or equal to maxRAF) and at least one VAF of the other group is a true variant (above or equal to minAAF).
 - Fixed in the population:
   All VAFs of the samples are above or equal to minAAF or below or equal to maxRAF. Either the option `--all-variants` or `--fixed` will show these variants.
@@ -129,16 +133,16 @@ By default, all genomic regions are shown with the option `--all-regions`. Howev
 
 The variant score displayed at the Score column of the CSV file is made of four different percentages separated by a ':' corresponding respectively to:
 
-- the percentage of non-grouped samples (not mentioned in the `--group` option) for which the allele is a true variant
-- the percentage of non-grouped samples (not mentioned in the `--group` option) for which the allele is a true reference
-- the percentage of grouped samples (mentioned in the `--group` option) for which the allele is a true variant
-- the percentage of grouped samples (mentioned in the `--group` option) for which the allele is a true reference
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true variant
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true reference
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true variant
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true reference
 
-Note that when the `--group` option is not used, the third and fourth percentages are equal to the first and second.
+Note that when the `--comparison` option is not used, the third and fourth percentages are equal to the first and second.
 
 As a result, fixed variant can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed variant in the population).
 
-Differentially expressed variants can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (variant present in at least one sample from one group and absent from at least one sample from the other group).
+Differentially prevalent variants can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (variant present in at least one sample from one group and absent from at least one sample from the other group).
 
 Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a mixed variant).
 
@@ -186,8 +190,8 @@ Similarly, the end of the mutated CDS is not precisely determined but estimated 
     varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
         --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
         --fixed --all-variants --all-regions \
-        --filtered-csv filtered-variants.csv \
-        --filtered-vcf filtered-variants.vcf
+        --out-filename filtered-variants \
+        --output-vcf
     ```
 
 2. Save variants falling in a gene regardless of their VAFs with 10 bases upstream and downstream of the variants.
@@ -197,41 +201,38 @@ Similarly, the end of the mutated CDS is not precisely determined but estimated 
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --fixed --all-variants --gene-regions \
        --nucl-window-before 10 --nucl-window-after 10 \
-       --filtered-csv filtered-variants.csv \
-       --filtered-vcf filtered-variants.vcf
+       --out-filename filtered-variants
    ```
-
-3. Save variants falling in a gene and differentially expressed (all samples vs all other samples) with protein sequences including 5 amino acids before and after the variant.
+   
+3. Save variants falling in a gene and differentially present (at least one true reference and true variant in all samples) with protein sequences including 5 amino acids before and after the variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
        --prot-window-before 5 --prot-window-after 5 \
-       --filtered-csv filtered-variants.csv \
-       --filtered-vcf filtered-variants.vcf
+       --out-filename filtered-variants
    ```
-
-4. Save variants falling in a gene and differentially expressed (3rd & 4th samples in VCF file header vs all other samples) with protein sequences including 5 amino acids before and after the variant.
+   
+4. Save variants falling in a gene and differentially present between families (at least one true reference in a family and a true variant in the other) with protein sequences including 5 amino acids before and after each variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
-       --group 3,4 \
+       --ped my_ped.ped --comparison families \
        --prot-window-before 5 --prot-window-after 5 \
-       --filtered-csv filtered-variants.csv \
-       --filtered-vcf filtered-variants.vcf
+       --out-filename filtered-variants
    ```
-
-4. Save variants falling in a gene and differentially expressed (3rd & 4th samples in VCF file header vs all other samples) only if there are at least 80% of non missing genotypes.
+   
+4. Save variants falling in a gene and differentially present in lineages (at least one true reference in a parent and a true variant in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
-       --group 3,4 --max-missing 0.2 \
+       --ped my_ped.ped --comparison lineages \
+       --max-missing 0.2 \
        --prot-window-before 5 --prot-window-after 5 \
-       --filtered-csv filtered-variants.csv \
-       --filtered-vcf filtered-variants.vcf
+       --out-filename filtered-variants
    ```

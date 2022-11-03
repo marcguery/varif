@@ -23,6 +23,12 @@ class Config(object):
         metavar="FILE",
         help='FASTA file')
 
+        parser.add_argument('--ped', type=str, default=None,
+        metavar="FILE",
+        help='PED file')
+        parser.add_argument('--comparison', dest='comparison', type=str, default=None,
+        metavar="GROUP", help='Compare variants between "families", "lineages" or "both"')
+
         parser.add_argument('--fixed', dest='fixed', action='store_true',
         help='Add population-fixed variants in the result')
         parser.add_argument('--no-fixed', dest='fixed', action='store_false',
@@ -61,10 +67,6 @@ class Config(object):
         parser.add_argument('--ratio-no-alt', dest='maxraf', type=float, default=0.2,
         metavar="RAF",
         help='Maximal ratio of alt/total depth to call it true ref')
-        parser.add_argument('--group', dest='refRanks', type=str, default="",
-        metavar="IDi,...,IDn",
-        help='Compare samples (order in VCF, starting with 1) of this group versus all the other samples')
-
 
         parser.add_argument('--max-missing', dest='maxMissing', type=float, default=1,
         metavar="PROP",
@@ -76,12 +78,11 @@ class Config(object):
         metavar="PROP",
         help='Minimal proportion of samples that are mutated in the variant group (non fixed variant)')
 
-        parser.add_argument('--filtered-csv', dest='csv', type=str, default=None,
-        metavar="FILE",
-        help='Name of the output CSV file')
-        parser.add_argument('--filtered-vcf', dest='filteredvcf', type=str, default=None,
-        metavar="FILE",
-        help='Name of the output VCF file')
+        parser.add_argument('--out-filename', dest='outFile', type=str, default=None,
+        metavar="FILENAME",
+        help='Name of the main output file (no extension) that will be appended with the group names')
+        parser.add_argument('--output-vcf', dest='outputVcf', action='store_true',
+        help='Whether to output filtered VCF files or not')
 
         parser.add_argument('--version', dest='version', action='store_true',
         help='Show varif version')

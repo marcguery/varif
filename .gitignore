@@ -2,4 +2,3 @@
 build/*
 *egg*/*
 .vscode/*
-varif/families.py

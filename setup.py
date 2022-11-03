@@ -1,11 +1,14 @@
 import setuptools
 
+with open('varif/version.py') as f:  
+    exec(f.read())
+
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="varif",
-    version="0.2.3",
+    version=__version__,
     author="Marc-Antoine Guery",
     author_email="marcantoine.guery@gmail.com",
     description="A variant filtering and annotating package",
