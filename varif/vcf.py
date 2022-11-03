@@ -1,3 +1,4 @@
+from sys import stderr
 
 class Vcf(object):
     """Store data loaded from a VCF file"""

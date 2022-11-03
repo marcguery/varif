@@ -1,4 +1,3 @@
-from sys import stderr
 from .variant import Variant
 
 class Variants(object):
