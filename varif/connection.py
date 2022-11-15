@@ -67,30 +67,7 @@ class Connection(object):
             raise ValueError("Name of the outfile must not exceed 30 characters")
         print("Running Varif %s with options \n%s"%(__version__, "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
     
-    def merge_CDS(self, gffId, chromosome):
-        """
-        Create the spliced CDS sequence from a genomic CDS sequence
-
-        gffId (str) : Identifier of the CDS
-        chromosome (str) : Name of the chromosome
-
-        return (list) : Sequence of the merged CDS and rtelative position of the initial CDS
-
-        """
-        parentalid = self.annotations.annotations[gffId]["parents"][0]
-        allCDS = [cds for cds in self.annotations.genesID[self.annotations.annotations[gffId]['masterid']]["CDS"] if self.annotations.annotations[cds]["parents"][0] == parentalid]
-        allCDSsorted = sorted(allCDS, key = lambda x : self.annotations.annotations[x]["start"])
-        genesequence = ""
-        for cds in allCDSsorted:
-            start=self.annotations.annotations[cds]["start"]
-            end=self.annotations.annotations[cds]["end"]
-            if cds == gffId:
-                startCDS = len(genesequence)+1
-            genesequence+=self.fasta.data[chromosome][start-1:end]
-        assert len(genesequence)%3 == 0
-        return [genesequence, startCDS]
-    
-    def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId):
+    def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId, stripMutation = False):
         """
         Get the change of aminoacid induced by a mutation
 
@@ -99,30 +76,55 @@ class Connection(object):
         reference (str) : Upper case sequence before mutation
         mutation (str) : Upper case sequence after mutation
         gffId (str) : ID of the CDS as in GFF3 file
+        keepMutation (bool) : Whether to remove bases of the mutated sequence located in introns
 
-        return (list) : Aminoacids before and after mutation
+        return (list) : CDS and aminoacids (with their positions) before and after mutation
 
         """
         assert self.annotations.annotations[gffId]['annotation']=='CDS'
-        if len(self.annotations.annotations[gffId]["parents"]) > 1:
-            print("Ambiguous origin of CDS %s: one of %s. Taking the first one (%s) by default"%(gffId, ", ".join(self.annotations.annotations[gffId]["parents"]), self.annotations.annotations[gffId]["parents"][0]), file = stderr)
-        genesequence, startCDS = self.merge_CDS(gffId, chromosome)
-        start=self.annotations.annotations[gffId]["start"] - (startCDS -1)
         strand=self.annotations.annotations[gffId]['strand']
         windowBefore=2+Config.options["protWindowBefore"]*3
         windowAfter=2+Config.options["protWindowAfter"]*3
 
-        startIndex = max(0, position - start)
-        endIndex=min(len(genesequence), startIndex+len(reference))
+        if len(self.annotations.annotations[gffId]["parents"]) > 1:
+            print("Ambiguous origin of CDS %s: one of %s. Taking the first one (%s) by default"%(gffId, ", ".join(self.annotations.annotations[gffId]["parents"]), self.annotations.annotations[gffId]["parents"][0]), file = stderr)
+        allCDSsorted, cdsCoords = self.annotations.get_CDS_from_same_parent(gffId)
+        intronCoords = self.fasta.get_introns_coords(cdsCoords)
+        genesequence = self.fasta.merge_CDS(chromosome, cdsCoords)
         
-        genesequencemut, startIndexMut, endIndexMut = self.fasta.insert_mutation(chromosome, genesequence, strand, start, position, reference, mutation)
-
+        if len(reference) > 1:
+            #Remove bases from the reference if located in an intronic region
+            newReference, newReferencePosition = self.fasta.remove_bases_from_features(reference, intronCoords, position-1)
+            assert newReference != "", "The reference sequence is not located in a CDS"
+        else:
+            #For SNPs, no difference : if they were located in an intron, this function would not be called
+            newReference, newReferencePosition = [reference, position - 1]
+        
+        #Remove bases from the mutated sequence only if stripMutation is enabled :
+        # the resulting CDS could be missing actual codons (coming from a genuine CDS region)
+        # but false positive will be removed (codons coming from an intronic region)
+        if stripMutation:
+            newMutation, newMutationPosition = self.fasta.remove_bases_from_features(mutation, intronCoords, position-1)
+        else:
+            newMutation = mutation
+        
+        #Relative position of the reference sequence to the start position of the gene
+        relativeVariantPosition = self.fasta.get_relative_gene_position(cdsCoords, newReferencePosition)
+        startIndex = max(0, relativeVariantPosition)
+        endIndex=min(len(genesequence), startIndex+len(newReference))
         oldCDS, aaPos, phase = self.fasta.window_CDS(genesequence, strand, startIndex, endIndex, windowBefore, windowAfter)
-        newCDS, newaaPos, newphase = self.fasta.window_CDS(genesequencemut, strand, startIndexMut, endIndexMut, windowBefore, windowAfter)
         oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
-        newProt=self.fasta.translate_CDS(newCDS, strand, newphase)
+
+        if newMutation == newReference:
+            #If both original and mutated sequences (without intron bases) are identical,
+            # no need to translate twice the same sequence
+            aaChanges=[[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [0,0], "", ""]    
+        else:
+            genesequencemut, startIndexMut, endIndexMut = self.fasta.insert_mutation(chromosome, genesequence, strand, cdsCoords[0][0], cdsCoords[-1][1], relativeVariantPosition, newReference, newMutation)
+            newCDS, newaaPos, newphase = self.fasta.window_CDS(genesequencemut, strand, startIndexMut, endIndexMut, windowBefore, windowAfter)
+            newProt=self.fasta.translate_CDS(newCDS, strand, newphase)
+            aaChanges=[[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [newaaPos,int(len(genesequencemut)/3)], newCDS, newProt]   
         
-        aaChanges=[[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [newaaPos,int(len(genesequencemut)/3)], newCDS, newProt]
         return aaChanges
     
     def load_features(self, allvariants, variantId):
@@ -150,20 +152,21 @@ class Connection(object):
             allvariants.variants[variantId]["cdsRef"][gffId]=aaDiff[1]
             allvariants.variants[variantId]["aaRef"][gffId]=aaDiff[2]
     
-    def define_category(self, allvariants, variantId):
+    def define_categories(self, allvariants, variantId):
         """
-        Determine of the variant is a SNP or INDEL and add genomic location
+        Determine if the variant is a SNP or INDEL and add genomic location
 
         allvariants (Variants) : Current variants processed
         variantId (str) : Unique identifier of the variant
 
         """
-        if all(len(allvariants.variants[variantId]["ref"]) == len(alt) for alt in allvariants.variants[variantId]["alts"]):
-            maincategory = "SNP"
-        else:
-            maincategory = "INDEL"
-        subcategories = sorted(set([self.annotations.annotations[gffId]['annotation'] for gffId in allvariants.variants[variantId]["features"]]))
-        allvariants.variants[variantId]["category"] = ",".join([maincategory]+[subcategory for subcategory in subcategories])
+        for alt in allvariants.variants[variantId]["alts"]:
+            if len(allvariants.variants[variantId]["ref"]) == len(alt):
+                maincategory = "SNP"
+            else:
+                maincategory = "INDEL"
+            subcategories = sorted(set([self.annotations.annotations[gffId]['annotation'] for gffId in allvariants.variants[variantId]["features"]]))
+            allvariants.variants[variantId]["categories"].append(",".join([maincategory]+[subcategories for subcategories in subcategories]))
 
     def print_line(self, allvariants, variantId=None, altIndex=0, sep=";"):
         """
@@ -189,7 +192,7 @@ class Connection(object):
             rightwindow="|"+allvariants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
             content=[
                 allvariants.variants[variantId]["chromosome"], str(allvariants.variants[variantId]["position"]), 
-                allvariants.variants[variantId]["category"],
+                allvariants.variants[variantId]["categories"][altIndex],
                 leftwindow+allvariants.variants[variantId]["ref"]+rightwindow, 
                 allvariants.variants[variantId]["alts"][altIndex],
                 "NA", "NA", "NA","NA", "NA",
@@ -267,7 +270,7 @@ class Connection(object):
             endPosition)
 
             allvariants.variants[key]["features"] = gffIds
-            self.define_category(allvariants, key)
+            self.define_categories(allvariants, key)
             if len(allvariants.variants[key]["features"]) == 0 and allRegions is False:
                 continue #No feature-surrounded variants
             allvariants.variants[key]["refwindow"] = self.fasta.window_sequence(allvariants.variants[key]["chromosome"],

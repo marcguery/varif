@@ -57,6 +57,25 @@ class Annotations(object):
                             beeingAddedInd.append(i)
         features[chromosome]=sorted(features[chromosome], key=lambda x : x[0])
         return features
+    
+    def get_CDS_from_same_parent(self, gffId):
+        """
+        Retrieve all the CDS sequences with the same parent
+
+        gffiId (str) : ID of the CDS
+
+        return (list) : IDs of CDS with the same parent and their 0-based coordinate ranges
+        
+        """
+        parentalid = self.annotations[gffId]["parents"][0]
+        allCDS = [cds for cds in self.genesID[self.annotations[gffId]['masterid']]["CDS"] if self.annotations[cds]["parents"][0] == parentalid]
+        allCDSsorted = sorted(allCDS, key = lambda x : self.annotations[x]["start"])
+        cdsCoords = []
+        for cds in allCDSsorted:
+            start=self.annotations[cds]["start"]
+            end=self.annotations[cds]["end"]
+            cdsCoords.append([start-1, end])
+        return [allCDSsorted, cdsCoords]
 
     def load_annotations_from_GFF(self, gff):
         """
@@ -70,7 +89,14 @@ class Annotations(object):
         while n < len(gfffile) and gfffile[n].startswith('##'):
             n+=1
         while n < len(gfffile):
+            if gfffile[n].startswith('#'):
+                n+=1
+                continue
             annotation=Annotation(gfffile[n], self.ranks)
+            if annotation.id is None:
+                #Discards entries without ID
+                n+=1
+                continue
             duplicatedidnumber=1
             newannotation=annotation.id
             while newannotation in self.annotations and duplicatedidnumber < 100:

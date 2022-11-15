@@ -51,7 +51,7 @@ class Variants(object):
             self.variants[identifier]={
                 "chromosome":variant.chromosome, "position":int(variant.position),
                 "props":variant.props, "types":variant.types,
-                "category":variant.category,
+                "categories":variant.categories,
                 "ref":variant.ref, "alts":variant.alts,
                 "refwindow":variant.refwindow,
                 "ratios":variant.ratios,

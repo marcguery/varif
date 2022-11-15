@@ -66,7 +66,7 @@ For each variant in each sample, `varif` will calculate the Variant Alternate Fr
 
 # Output
 
-Variants passing the filters will be stored in a CSV file (variants from the same chromosome location are separated) generated with the name (without extension) set by the option `--out-filename`. If the option `--output-vcf` is set, the corresponding filtered variants from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).
+Variants passing the filters will be stored in a CSV file (variants from the same chromosome location are separated) generated with the name (without extension) set by the option `-outfilename`. If the option `--output-vcf` is set, the corresponding filtered variants from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).
 
 ## CSV content
 
@@ -91,6 +91,8 @@ The output CSV file separated by semicolons contains:
 
 \*\*: Applies for transcribed regions, otherwise *NA*
 
+Note that when the CDSalt field is empty and that the AAalt field contains '*(0/0)*', this means that both reference and mutated CDS sequences are identical (this can happen when an INDEL occurs at the edge of a CDS and an intron).
+
 # Filters
 
 ## Minimal depth
@@ -99,7 +101,7 @@ The variant allele frequencies are calculated only if the sample allele depth (t
 
 ## Allele frequencies
 
-There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially present in a population. By default, minAAF is equal to 0.8 and maxRAF to 0.2.
+There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially distributed in a population. By default, minAAF is equal to 0.8 and maxRAF to 0.2.
 
 For each variant at a chromosomal location and for each sample, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
 
@@ -109,7 +111,7 @@ If the VAF is above minAAF, the variant is considered a true variant, while if t
 
 ## <a name="groups"></a>Sample groups
 
-By default, samples are not grouped into subcategories which implies that a self-self comparison will be made to determine which variant is differentially prevalent based on the presence of true variant samples and true reference samples. However, it is possible to separate samples into groups and look for variants differentially present between those groups by providing the option `--comparison` with one of the keywords *families*, *lineages* or *both*. Samples can be grouped either into families, or parental-offspring relationships according to the metadata from the PED file. Variant differential prevalence will be compared in every combination of families and direct parent versus offspring. The relationship between the two groups is symmetrical, meaning that variants detected in either group are candidates for being considered differentially present.
+By default, samples are not grouped into subcategories which implies that a self-self comparison will be made to determine which variant is differentially distributed based on the presence of true variant samples and true reference samples. However, it is possible to separate samples into groups and look for variants differentially distributed between those groups by providing the option `--comparison` with one of the keywords *families*, *lineages* or *both*. Samples can be grouped either into families, or parental-offspring relationships according to the metadata from the PED file. Variant differential distribution will be compared in every combination of families and direct parent versus offspring. The relationship between the two groups is symmetrical, meaning that variants detected in either group are candidates for being considered differentially distributed.
 
 Groups with too many missing genotypes (because of insufficient depth or a mixed variant) can be filtered out with `--max-missing` (default 1) which discards variants if one group has more missing genotypes than the selected proportion.
 
@@ -127,7 +129,7 @@ The combination of VAFs are used to classify variants that are:
 
 ## Specific regions
 
-By default, all genomic regions are shown with the option `--all-regions`. However, variants outside a gene (as annotated in the GFF file) can be removed from the output with the option `--gene-regions`. Variants are shown if their position in the VCF file are inside a gene (hence INDELs staring just before a gene will not be selected).
+By default, all genomic regions are shown with the option `--all-regions`. However, variants outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--gene-regions`.
 
 ## <a name="scores"></a>Variant scores
 
@@ -142,7 +144,7 @@ Note that when the `--comparison` option is not used, the third and fourth perce
 
 As a result, fixed variant can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed variant in the population).
 
-Differentially prevalent variants can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (variant present in at least one sample from one group and absent from at least one sample from the other group).
+Differentially distributed variants can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (variant present in at least one sample from one group and absent from at least one sample from the other group).
 
 Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a mixed variant).
 
@@ -159,15 +161,16 @@ All the feature types detected are stored after the variant type in the Type col
 
 ## Automatic translation
 
-When the variant is inside a CDS, `varif` will predict the new CDS sequence affected by the variant by replacing the reference sequence by the mutation. However, knowing where to start the CDS can be difficult in the case of a mutation affecting the very first codon of the CDS. In that matter, several further modifications are added to produce the most biologically relevant CDS:
+When the variant is inside a CDS, `varif` will predict the new CDS sequence affected by the variant by replacing the reference sequence (without bases from intronic regions) by the mutation. However, knowing where to start the CDS can be difficult in the case of a mutation affecting the very first codon of the CDS. In that matter, several further modifications are added to produce the most biologically relevant CDS:
 
 - When the mutated sequence is shorter than the reference sequence:
   - If the very first bases of the initial CDS are not recovered after adding the mutation, bases are added from the upstream sequence to lead to a mutated CDS of the same size than the initial one
   - Otherwise, bases from the downstream sequence are added to match the initial CDS size
-
 - When the mutated sequence is longer than the reference sequence:
   - Bases located in the upstream region of the CDS are not included in the mutated CDS
   - All other bases from the mutation are kept (including those from the downstream region) and bases from the downstream sequence after the mutation are added to make the length of the mutated CDS a multiple of 3
+
+Finally, reference bases located within introns are removed before being replaced by the mutated sequence. For now, as no base from mutated sequence are removed, it is possible that bases which are actually part of an intron are included in the mutated CDS.
 
 Amino acids affected by the reference and alternate sequence are obtained by translating the initial and mutated CDS respectively. Additional codons can be added in a chosen window with `--prot-window-before` and `--prot-window-after` options; limited to the first and last codon (or when a stop codon is obtained). The position of the codon is then calculated from their rank from the beginning of the initial and mutated CDS and shown in the AAref and AAalt columns of the CSV file. The codon positions are associated with the total number of codons in each CDS, including the stop codon.
 
@@ -182,6 +185,10 @@ As `varif` considers only one variant at a time, the wrong mutated CDS can be tr
 Since `varif` does not consider bases from a mutation if they reach the upstream sequence (before the first codon), a longer mutated CDS starting before the initial first codon could be missed.
 
 Similarly, the end of the mutated CDS is not precisely determined but estimated by the addition of enough bases to reach at least the initial CDS size or a multiple of 3.
+
+## Mutation overlapping CDS and introns
+
+if an INDEL includes the edge between a CDS and an intron, the resulting protein could include false codons from the intronic regions as for now no mutated base within an intronic region are removed.
 
 # Examples
 
@@ -204,7 +211,7 @@ Similarly, the end of the mutated CDS is not precisely determined but estimated 
        --out-filename filtered-variants
    ```
    
-3. Save variants falling in a gene and differentially present (at least one true reference and true variant in all samples) with protein sequences including 5 amino acids before and after the variant.
+3. Save variants falling in a gene and differentially distributed (at least one true reference and true variant in all samples) with protein sequences including 5 amino acids before and after the variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
@@ -214,7 +221,7 @@ Similarly, the end of the mutated CDS is not precisely determined but estimated 
        --out-filename filtered-variants
    ```
    
-4. Save variants falling in a gene and differentially present between families (at least one true reference in a family and a true variant in the other) with protein sequences including 5 amino acids before and after each variant.
+4. Save variants falling in a gene and differentially distributed between families (at least one true reference in a family and a true variant in the other) with protein sequences including 5 amino acids before and after each variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
@@ -225,7 +232,7 @@ Similarly, the end of the mutated CDS is not precisely determined but estimated 
        --out-filename filtered-variants
    ```
    
-4. Save variants falling in a gene and differentially present in lineages (at least one true reference in a parent and a true variant in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
+4. Save variants falling in a gene and differentially distributed in lineages (at least one true reference in a parent and a true variant in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \

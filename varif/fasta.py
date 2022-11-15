@@ -68,60 +68,173 @@ class Fasta(object):
             newcds+=self.dnareverse[cds[i]] if cds[i] in self.dnareverse else '?'
         return newcds
     
-    def insert_mutation(self, chromosome, genesequence, strand, startgene, startref, reference, mutation):
+    def get_relative_gene_position(self, cdsCoords, position):
+        """
+        Transform a chromosomal position to a gene position (without intronic sequences)
+
+        cdsCoords (list) : 0-based coordinate ranges of all the CDS sequences (ordered)
+        position (int) : 0-based position to convert
+
+        return (int) : Relative position (negative or positive) to the 0-based gene starting position 
+
+        """
+        indexCoord = 0
+        sumCDS = 0
+        if position < cdsCoords[indexCoord][0]:
+            relposition = position - cdsCoords[indexCoord][0]
+            return relposition
+        while position not in range(cdsCoords[indexCoord][0], cdsCoords[indexCoord][1]):
+            sumCDS += cdsCoords[indexCoord][1] - cdsCoords[indexCoord][0]
+            indexCoord += 1
+            if indexCoord == len(cdsCoords):
+                if position < cdsCoords[len(cdsCoords)-1][0]:
+                    return None
+                else:
+                    break
+        relposition = sumCDS + position - cdsCoords[indexCoord][0]
+        return relposition        
+    
+    def get_introns_coords(self, cdsCoords):
+        """
+        Retrieve the range coordinates of intronic sequences given CDS coordinates
+
+        cdsCoords (list) : 0-based coordinate ranges of the CDS sequences
+
+        return (list) : 0-based coordinate ranges of the intronic sequences
+
+        """
+        intronsCoords = []
+        for indexcds in range(1, len(cdsCoords)):
+            endpreviouscds = cdsCoords[indexcds-1][1]
+            startcds = cdsCoords[indexcds][0]
+            intronsCoords.append([endpreviouscds, startcds])
+        return intronsCoords
+            
+    def remove_bases_from_features(self, sequence, featuresCoord, sequencePosition):
+        """
+        Remove bases from a sequence if they are located within given coordinate ranges
+
+        sequence (str) : The sequence to remove bases from
+        featuresCoord (list) : 0-based coordinate ranges of the features
+        sequencePosition (int) : 0-based start position of the sequence
+
+        return (list) : Sequence without bases located within features and new starting position of the sequence
+
+        """
+        coordtoremove = []
+        sequenceLastposition = sequencePosition + len(sequence)
+        newSequencePosition = sequencePosition
+        indexSequence = 0
+        indexFeature = 0
+
+        #Will save from left to right the coordinates of the sequence that
+        # are included in the range coordinates features
+        while indexFeature < len(featuresCoord):
+            currentPosition = max(indexSequence + sequencePosition, featuresCoord[indexFeature][0])
+            if currentPosition >= featuresCoord[indexFeature][1]:
+                #Sequence to check is after last base of feature
+                indexFeature += 1
+                continue
+            if currentPosition >= len(sequence)+sequencePosition or sequenceLastposition <= featuresCoord[indexFeature][0]:
+                #Sequence was completely checked
+                break
+            if currentPosition >= featuresCoord[indexFeature][0] and currentPosition < featuresCoord[indexFeature][1]:
+                #Sequence to check is included in a feature
+                #Store index of sequence located within the feature
+                maxPosition = min(sequenceLastposition - sequencePosition, featuresCoord[indexFeature][1] - sequencePosition)
+                coordtoremove.append([currentPosition - sequencePosition, maxPosition])
+                if currentPosition == sequencePosition:
+                    #If the firs bases of the sequence is removed, 
+                    # shift the start position
+                    newSequencePosition = sequencePosition + maxPosition
+                indexFeature += 1
+                indexSequence = maxPosition
+        
+        if coordtoremove == []:
+            #No bases included in any feature
+            return [sequence, sequencePosition]
+        #Create a new sequence with the complentary intervals
+        complementaryInterval = [0,coordtoremove[0][0]]
+        newSequence = sequence[complementaryInterval[0]:complementaryInterval[1]]
+
+        for indexcoord in range(1,len(coordtoremove)):
+            complementaryInterval = [coordtoremove[indexcoord-1][1],coordtoremove[indexcoord][0]]
+            newSequence += sequence[complementaryInterval[0]:complementaryInterval[1]]
+        
+        complementaryInterval = [coordtoremove[len(coordtoremove)-1][1],len(sequence)]
+        newSequence += sequence[complementaryInterval[0]:complementaryInterval[1]]
+
+        return [newSequence, newSequencePosition]
+    
+    def insert_mutation(self, chromosome, genesequence, strand, startgene, endgene, startref, reference, mutation):
         """
         Update a CDS sequence by replacing a reference sequence by a mutation
 
-        chromosome (str) : Name of the chromosome where the CDS is
-        genesequence (str) : Upper case sequence of the CDS
+        chromosome (str) : Name of the chromosome where the merged CDS sequence is
+        genesequence (str) : Upper case of the merged CDS sequence
         strand (str) : Either "+" or "-" indicating the direction of translation
-        startgene (int) : Chromosomal position of the first base of the CDS
-        startref (int) : Chromosomal position of the first base of the reference sequence
+        startgene (int) : Chromosomal position of the first base of the merged CDS sequence
+        startref (int) : Relative position of the reference sequence to the 0-based starting position of the merged CDS sequence
         reference (str) : Upper case sequence of the reference sequence
         mutation (str) : Upper case sequence of the mutation
 
-        return (list) : Sequence of the new CDS, relative positions of the mutation
+        return (list) : Sequence of the new merged CDS sequence, relative positions of the mutation
 
         """
-        end=startgene + len(genesequence)
-        posIndex=startref - startgene
-        startIndex = max(0, posIndex)
+        startIndex = max(0, startref)
         endIndex=min(len(genesequence), startIndex+len(reference))
         #Add bases if the mutation is shorter than the reference
         shift = len(reference) - len(mutation)
         #Hanging reference bases from the reference are not included in the size difference
         #Ref bases before the start of CDS
-        upshift = shift + posIndex +1 if posIndex < -1 else shift
+        upshift = shift + startref +1 if startref < -1 else shift
         #Ref bases after the end of CDS
-        downshift = shift - (posIndex+len(reference)-len(genesequence)) if posIndex + len(reference) >= len(genesequence) else shift
+        downshift = shift - (startref+len(reference)-len(genesequence)) if startref + len(reference) >= len(genesequence) else shift
 
         #Remove bases from the mutation if they increase the initial CDS size by adding bases before the first codon
         # or add bases from the up/downstream sequence to match the initial CDS size
         #'+' strand: remove mutated bases if located before the start of the CDS
-        upmutshift = max(0, -upshift) if startref <= startgene and strand == "+" else 0
+        upmutshift = max(0, -upshift) if startref <= 0 and strand == "+" else 0
         #'+' strand: add upstream bases if mutation is too short and reference starts before the start of CDS
         # '-' strand: add upstream bases if mutation is shorter than the reference
-        upshift = max(0, upshift) if strand == "-" and startIndex + len(mutation) < len(genesequence) or startref <= startgene else 0
+        upshift = max(0, upshift) if strand == "-" and startIndex + len(mutation) < len(genesequence) or startref <= 0 else 0
         #'-' strand: remove mutated bases if located after the end of the CDS
         downmutshift = max(0, -downshift) if startIndex + len(mutation) >= len(genesequence) and strand == "-" else 0
         #'-' strand: add upstream bases if mutation is too short and reference ends after the end of the CDS
         # '+' strand: add downstream bases if mutation is shorter than the reference
-        downshift = max(0, downshift) if strand == "+" and startref > startgene or startIndex + len(reference) >= len(genesequence) else 0
+        downshift = max(0, downshift) if strand == "+" and startref > 0 or startIndex + len(reference) >= len(genesequence) else 0
             
         genesequencemut = self.data[chromosome][startgene-upshift:startgene]
         genesequencemut+= genesequence[0:startIndex]
         genesequencemut+= mutation[upmutshift:len(mutation)-downmutshift]
         genesequencemut+= genesequence[endIndex:]
-        genesequencemut+= self.data[chromosome][end:end+downshift]
+        genesequencemut+= self.data[chromosome][endgene:endgene+downshift]
 
         #Add more bases to make the CDS a multiple of 3
         # from upstream (- strand) or downstream (+ strand)
         basestoaddforcds = -len(genesequencemut)%3
-        genesequencemut = self.data[chromosome][startgene-upshift-basestoaddforcds:startgene-upshift]+genesequencemut if strand == "-" else genesequencemut+self.data[chromosome][end+downshift:end+downshift+basestoaddforcds]
+        genesequencemut = self.data[chromosome][startgene-upshift-basestoaddforcds:startgene-upshift]+genesequencemut if strand == "-" else genesequencemut+self.data[chromosome][endgene+downshift:endgene+downshift+basestoaddforcds]
 
         startIndexMut = startIndex+upshift+basestoaddforcds if strand == "-" else startIndex+upshift
         endIndexMut=min(len(genesequencemut), startIndexMut+len(mutation[upmutshift:len(mutation)-downmutshift]))
         return [genesequencemut, startIndexMut, endIndexMut]
+    
+    def merge_CDS(self, chromosome, cdsCoords):
+        """
+        Create the spliced CDS sequence from a genomic CDS sequence
+
+        chromosome (str) : Name of the chromosome
+        cdsCoords (list) : 0-based coordinate ranges of CDS sequences (ordered)
+
+        return (str) : Sequence of the merged CDS
+
+        """
+        
+        genesequence = ""
+        for coord in cdsCoords:
+            genesequence+=self.data[chromosome][coord[0]:coord[1]]
+        assert len(genesequence)%3 == 0
+        return genesequence
     
     def window_sequence(self, chromosome, position, sequence, windowBefore, windowAfter):
         """
@@ -154,8 +267,8 @@ class Fasta(object):
         strand (str) : Either "+" or "-" indicating the direction of translation
         startIndex (int) : Relative position of the first base of the sequence
         endIndex (int) : Relative position of the last base of the sequence
-        windowBefore (int) : Number of codons to extract before the intiial codon
-        windowAfter (int) : Number of codons to extract after the intiial codon
+        windowBefore (int) : Number of codons to extract before the initial codon
+        windowAfter (int) : Number of codons to extract after the initial codon
 
         return (list) : Codons, the CDS position of the first initial codon and the phase
 

@@ -28,7 +28,7 @@ class Annotation(object):
         self.phase=gffLine[ranks[7]]
         misc=gffLine[ranks[8]].strip("\n").split(";")
         self.misc={info.split("=")[0]:info.split("=")[1] for info in misc}
-        self.id=self.misc["ID"]
+        self.id=self.misc["ID"] if "ID" in self.misc else None
         self.masterid=self.id
         self.parents=self.misc["Parent"].split(",") if "Parent" in self.misc else []
         self.description=self.misc["description"] if "description" in self.misc else ""

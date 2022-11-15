@@ -22,6 +22,10 @@ class Config(object):
         parser.add_argument('-fasta', type=str, default=None,
         metavar="FILE",
         help='FASTA file')
+        
+        parser.add_argument('-outfilename', dest='outFile', type=str, default=None,
+        metavar="FILENAME",
+        help='Name of the main output file (no extension) that will be appended with the group names')
 
         parser.add_argument('--ped', type=str, default=None,
         metavar="FILE",
@@ -78,9 +82,6 @@ class Config(object):
         metavar="PROP",
         help='Minimal proportion of samples that are mutated in the variant group (non fixed variant)')
 
-        parser.add_argument('--out-filename', dest='outFile', type=str, default=None,
-        metavar="FILENAME",
-        help='Name of the main output file (no extension) that will be appended with the group names')
         parser.add_argument('--output-vcf', dest='outputVcf', action='store_true',
         help='Whether to output filtered VCF files or not')
 

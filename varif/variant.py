@@ -27,7 +27,7 @@ class Variant(object):
         ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
         props (list) : True var and true ref prct of both groups for each alt
         types (list) : Type of each variant among differential, fixed and ambiguous
-        category (str) : Type of variant : 'SNP' or 'INDEL' and annotation if available
+        categories (list) : Type of each variant at the given coordinates : 'SNP' or 'INDEL'
         log (list) : Log of the full variant (VCF line) and of each alt
 
         """
@@ -51,8 +51,8 @@ class Variant(object):
         self.ratios={}
         self.props=[]
         self.types=[]
-        self.category=""   
-        self.log=["",[]]    
+        self.categories=[]   
+        self.log=["",[]]
     
     def calculate_ratios(self):
         """
