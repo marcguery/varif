@@ -195,9 +195,9 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
 1. Save all possible variants regardless of their VAFs.
     ```bash
     varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+        -outfilename ./out/filtered-variants \
         --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
         --fixed --all-variants --all-regions \
-        --out-filename filtered-variants \
         --output-vcf
     ```
 
@@ -205,41 +205,41 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --fixed --all-variants --gene-regions \
-       --nucl-window-before 10 --nucl-window-after 10 \
-       --out-filename filtered-variants
+       --nucl-window-before 10 --nucl-window-after 10
    ```
    
 3. Save variants falling in a gene and differentially distributed (at least one true reference and true variant in all samples) with protein sequences including 5 amino acids before and after the variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
-       --prot-window-before 5 --prot-window-after 5 \
-       --out-filename filtered-variants
+       --prot-window-before 5 --prot-window-after 5
    ```
    
 4. Save variants falling in a gene and differentially distributed between families (at least one true reference in a family and a true variant in the other) with protein sequences including 5 amino acids before and after each variant.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
        --ped my_ped.ped --comparison families \
-       --prot-window-before 5 --prot-window-after 5 \
-       --out-filename filtered-variants
+       --prot-window-before 5 --prot-window-after 5
    ```
    
 4. Save variants falling in a gene and differentially distributed in lineages (at least one true reference in a parent and a true variant in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
        --no-fixed --best-variants --gene-regions \
        --ped my_ped.ped --comparison lineages \
        --max-missing 0.2 \
-       --prot-window-before 5 --prot-window-after 5 \
-       --out-filename filtered-variants
+       --prot-window-before 5 --prot-window-after 5
    ```

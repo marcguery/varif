@@ -63,8 +63,8 @@ class Connection(object):
         for arg in ["protWindowBefore", "protWindowAfter"]:
             if arguments[arg] < 0:
                 raise ValueError("Protein window '%s' must be above 0, not %s"%(arg, arguments[arg]))
-        if len(arguments["outFile"]) > 30:
-            raise ValueError("Name of the outfile must not exceed 30 characters")
+        if len(arguments["outFile"].split("/")[-1]) > 100:
+            raise ValueError("Name of the outfile must not exceed 100 characters")
         print("Running Varif %s with options \n%s"%(__version__, "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId, stripMutation = False):
