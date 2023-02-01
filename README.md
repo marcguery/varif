@@ -60,32 +60,37 @@ The optional PED file containing the family membership and parental relationship
 
 # Summary
 
-Use `varif` to filter and rank variants submitted through a VCF file.
+Use `varif` to filter and annotate variants submitted through a VCF file.
 
-For each variant in each sample, `varif` will calculate the Variant Alternate Frequency (VAF) and classify it as a true variant or not based on filters applied with the available options. The values of VAFs for each variant are compared to find sites likely to be differentially distributed among samples.
+For each allele in each sample, `varif` will calculate the Allele Sample Proportion (ASP) and classify it as a true mutation or not based on filters applied with the available options. The values of all ASPs are compared to find sites likely to be differentially mutated between group of samples.
 
-# Output
+Alleles passing the filters will be stored in a CSV file (multiple alleles at the same position are separated) generated with the name (without extension) set by the option `-outfilename`. If the option `--output-vcf` is set, the corresponding filtered variants (multiple alleles at the same position are merged) from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).
 
-Variants passing the filters will be stored in a CSV file (variants from the same chromosome location are separated) generated with the name (without extension) set by the option `-outfilename`. If the option `--output-vcf` is set, the corresponding filtered variants from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).
+Here is an example of the  `varif` main output obtained with default parameters:
+
+| Chromosome | Position | Type                     | Ref  | Alt  | CDSref           | CDSalt   | AAref      | AAalt       | Annotation                   | Proportions       | S1   | S2   | S3   |
+| ---------- | -------- | ------------------------ | ---- | ---- | ---------------- | -------- | ---------- | ----------- | ---------------------------- | ----------------- | ---- | ---- | ---- |
+| Chr1       | 123123   | SNP                      | C    | G    | NA               | NA       | NA         | NA          | NA                           | `067:033:067:033` | 0.91 | 0    | 1    |
+| Chr1       | 456456   | SNP,gene,mRNA            | T    | A    | NA               | NA       | NA         | NA          | Unknown function (gene_id_1) | `033:033:033:033` | 0.54 | 0    | 1    |
+| Chr2       | 123123   | SNP,CDS,exon,gene,mRNA   | G    | T    | AAGCG (CDS_id_2) | AATCG    | L (45/458) | I (45/458)  | Unknown function (gene_id_2) | `000:067:000:067` | NA   | 0    | 0.14 |
+| Chr3       | 123456   | INDEL,CDS,exon,gene,mRNA | G    | GATA | ATGAT (CDS_id_3) | ATGATAAT | D (52/123) | DN (52/124) | Unknown function (gene_id_3) | `000:100:000:100` | 0    | 0.12 | 0    |
 
 ## CSV content
 
 The output CSV file separated by semicolons contains:
 
-- Chromosome: The chromosome name
-- Position: The starting position of the variant
-- Type: The type of variant (SNP, INDEL...) followed by its genomic location
-- Ref: The reference sequence +/- up and downstream sequences (separated by '|')
-- Alt: The alternate sequence
-- CDSref: The windowed CDS reference sequence including the variant followed by the CDS identifier\*
-- CDSalt: The windowed CDS alternate sequences including the variant\*
-- AAref: The amino acids resulting from the windowed reference sequence followed by the codon position\*
-- AAalt: The amino acids resulting from the windowed alternate sequences followed by the codon position\*
-- Annotation: The annotation described in the GFF file followed by the gene identifier\*\*
-- Score: The score of the variant (see [Variant scores](#scores))
-- Sample#1: Proportion of alternate allele for sample 1
-- ...
-- Sample#n: Proportion of alternate allele for sample n
+- ***Chromosome*** : The chromosome name
+- ***Position*** : The starting position of the allele
+- ***Type*** : The type of allele (SNP, INDEL...) followed by genomic features found
+- ***Ref*** : The reference sequence +/- up and downstream sequences (separated by '|')
+- ***Alt*** : The alternate sequence
+- ***CDSref*** : The windowed CDS reference sequence including the allele followed by the CDS identifier\*
+- ***CDSalt*** : The windowed CDS alternate sequences including the allele\*
+- ***AAref*** : The amino acids resulting from the windowed reference sequence followed by the codon position\*
+- ***AAalt*** : The amino acids resulting from the windowed alternate sequences followed by the codon position\*
+- ***Annotation*** : The annotation described in the GFF file followed by the gene identifier\*\*
+- ***Proportions*** : The proportion of mutated and reference alleles in the population (see [Allele Population Proportions](#app))
+- The remaining columns contain the allele proportion of each sample (ASPs)
 
 \*: Applies for CDS regions, otherwise *NA*
 
@@ -95,58 +100,58 @@ Note that when the CDSalt field is empty and that the AAalt field contains '*(0/
 
 # Filters
 
+## Allele Sample Proportions (ASP)
+
+There are 2 cut-offs of minimal alternate ASP (minAltASP with `--ratio-alt`) and maximal reference ASP (maxRefASP with `--ratio-ref`) used by `varif` to determine if alleles are differentially distributed in a population. By default, minAltASP is equal to 0.8 and maxRefASP to 0.2.
+
+For each allele and for each sample, the ASP is calculated using the different allele read depths (ARD):
+
+***ASP*** = (*alternate ARD*) / (*all alternates ARD* + *reference ARD*)
+
+If the ASP is above minAltASP, the allele is considered a true mutation, while if the ASP is below maxRefASP, it is considered a true reference. When the ASP is between maxRefASP and minAltASP, the genotype cannot be called and the allele is mixed.
+
 ## Minimal depth
 
-The variant allele frequencies are calculated only if the sample allele depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
-
-## Allele frequencies
-
-There are 2 cut-offs of minimal Alternate Allele Frequency (minAAF with `--ratio-alt`) and maximal Reference Allele Frequency (maxRAF with `--ratio-no-alt`) used by `varif` to determine if variants are differentially distributed in a population. By default, minAAF is equal to 0.8 and maxRAF to 0.2.
-
-For each variant at a chromosomal location and for each sample, the variant allele frequency (VAF) is calculated using the different allele depths (AD):
-
-***VAF*** = (*variant AD*) / (*other variants AD* + *reference AD*)
-
-If the VAF is above minAAF, the variant is considered a true variant, while if the VAF is below maxRAF, it is considered a true reference. When the VAF is between maxRAF and minAAF, the genotype cannot be called and the variant is mixed.
+The ASPs are calculated only if the sample read depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
 
 ## <a name="groups"></a>Sample groups
 
-By default, samples are not grouped into subcategories which implies that a self-self comparison will be made to determine which variant is differentially distributed based on the presence of true variant samples and true reference samples. However, it is possible to separate samples into groups and look for variants differentially distributed between those groups by providing the option `--comparison` with one of the keywords *families*, *lineages* or *both*. Samples can be grouped either into families, or parental-offspring relationships according to the metadata from the PED file. Variant differential distribution will be compared in every combination of families and direct parent versus offspring. The relationship between the two groups is symmetrical, meaning that variants detected in either group are candidates for being considered differentially distributed.
+Samples groups are used to determine which allele is differentially distributed based on the presence of true mutated samples and true reference samples between two groups. It is possible to separate samples into groups and look for alleles differentially distributed between those groups by providing the option `--comparison` with one of the keywords *families*, *lineages*, *both* or *all* (the default). Samples can thus be grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution will be compared in every combination of families and/or direct parent versus offspring; or all-against-all (default). The relationship between the two groups is symmetrical, meaning that alleles present in either group are candidates for being considered differentially distributed.
 
-Groups with too many missing genotypes (because of insufficient depth or a mixed variant) can be filtered out with `--max-missing` (default 1) which discards variants if one group has more missing genotypes than the selected proportion.
+Groups with too many missing genotypes (because of insufficient depth or a mixed ASP) can be filtered out with `--max-missing` (default 1) which discards alleles if one group has more missing genotypes than the selected proportion.
 
-Group-specific variants can be selected with the option `--max-similarity` (default 1) by providing the maximal proportion of the number of mutated samples between the group with less mutated samples over the one with the most mutated samples.
+Group-specific alleles can be selected with the option `--max-similarity` (default 1) by providing the maximal proportion of the number of mutated samples between the group with less mutated samples over the one with the most mutated samples.
 
-Variants that are too rare can be filtered out by the option `--min-variants` (default 0) which will discard variants that are present in less than this proportion of the number of samples in both group.
+Alleles that are too rare can be filtered out by the option `--min-mutated` (default 0) which will discard alleles that are present in less than this proportion of the number of samples in both group.
 
-The combination of VAFs are used to classify variants that are:
+The combination of ASPs are used to classify alleles that are:
 
 - Differentially distributed between two groups:
-  At least one VAF of one group is a true reference (below or equal to maxRAF) and at least one VAF of the other group is a true variant (above or equal to minAAF).
+  At least one ASP of one group is a true reference (below or equal to maxRSP) and at least one ASP of the other group is a true mutation (above or equal to minVSP).
 - Fixed in the population:
-  All VAFs of the samples are above or equal to minAAF or below or equal to maxRAF. Either the option `--all-variants` or `--fixed` will show these variants.
-- Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these variants while the option `--best-variants` will omit them.
+  All ASPs of the samples are above or equal to minVSP or below or equal to maxRSP. Either the option `--all-variants` or `--fixed` will show these alleles.
+- Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these alleles while the option `--best-variants` will omit them. Note that the whole variant (with all alternate alleles merged in a single line) will be saved in the VCF file even if only one allele is passing the filters.
 
 ## Specific regions
 
-By default, all genomic regions are shown with the option `--all-regions`. However, variants outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--gene-regions`.
+By default, all genomic regions are included with the option `--all-regions`. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--gene-regions`.
 
-## <a name="scores"></a>Variant scores
+## <a name="app"></a>Allele Population Proportions
 
-The variant score displayed at the Score column of the CSV file is made of four different percentages separated by a ':' corresponding respectively to:
+The Allele Population Proportions displayed at the Proportions column of the CSV file is made of four different percentages separated by a ':' corresponding respectively to:
 
-- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true variant
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true mutation
 - the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true reference
-- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true variant
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true mutation
 - the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true reference
 
-Note that when the `--comparison` option is not used, the third and fourth percentages are equal to the first and second.
+Note that when the `--comparison` option is set to *all*, the third and fourth percentages are equal to the first and second.
 
-As a result, fixed variant can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed variant in the population).
+As a result, fixed allele can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed allele in the population).
 
-Differentially distributed variants can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (variant present in at least one sample from one group and absent from at least one sample from the other group).
+Differentially distributed alleles can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (allele present in at least one sample from one group and absent from at least one sample from the other group).
 
-Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a mixed variant).
+Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a mixed allele).
 
 # Additional information
 
@@ -156,12 +161,12 @@ The genomic sequences that are upstream or downstream of the reference allele ca
 
 ## Overlapping features
 
-Variant inside features are annotated given the feature type available in the third column of the GFF file. If the feature type contains the keyword 'gene', their annotation is saved in the Annotation column of the CSV file. If the feature type is 'CDS', the automatic translation will be processed and the CDS and amino acid sequences associated with the CDS annotation will be added in the CDSref, CDSalt, AAref and AAalt columns of the CSV file.
-All the feature types detected are stored after the variant type in the Type column of the CSV file.
+Alleles inside features are annotated given the feature type available in the third column of the GFF file. If the feature type contains the keyword 'gene', their annotation is saved in the Annotation column of the CSV file. If the feature type is 'CDS', the automatic translation will be processed and the CDS and amino acid sequences associated with the CDS annotation will be added in the CDSref, CDSalt, AAref and AAalt columns of the CSV file.
+All the feature types detected are stored after the allele type in the Type column of the CSV file.
 
 ## Automatic translation
 
-When the variant is inside a CDS, `varif` will predict the new CDS sequence affected by the variant by replacing the reference sequence (without bases from intronic regions) by the mutation. However, knowing where to start the CDS can be difficult in the case of a mutation affecting the very first codon of the CDS. In that matter, several further modifications are added to produce the most biologically relevant CDS:
+When the allele is inside a CDS, `varif` will predict the new CDS sequence with the alternate allele by replacing the reference sequence (without bases from intronic regions) by the mutation. However, knowing where to start the CDS can be difficult in the case of a mutation affecting the very first codon of the CDS. In that matter, several further modifications are added to produce the most biologically relevant CDS:
 
 - When the mutated sequence is shorter than the reference sequence:
   - If the very first bases of the initial CDS are not recovered after adding the mutation, bases are added from the upstream sequence to lead to a mutated CDS of the same size than the initial one
@@ -176,9 +181,9 @@ Amino acids affected by the reference and alternate sequence are obtained by tra
 
 # Limitations
 
-## Multi-variant CDS
+## Multi allelic CDS
 
-As `varif` considers only one variant at a time, the wrong mutated CDS can be translated if two different mutations occur in the same one.
+As `varif` considers only one allele at a time, the wrong mutated CDS can be translated if two different mutations occur in the same one.
 
 ## CDS prediction accuracy
 
@@ -192,52 +197,52 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
 
 # Examples
 
-1. Save all possible variants regardless of their VAFs.
+1. Save all possible alleles regardless of their ASPs.
     ```bash
     varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
         -outfilename ./out/filtered-variants \
-        --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
         --fixed --all-variants --all-regions \
         --output-vcf
     ```
 
-2. Save variants falling in a gene regardless of their VAFs with 10 bases upstream and downstream of the variants.
+2. Save alleles falling in a gene regardless of their ASPs with 10 bases upstream and downstream of the alleles.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
-       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
        --fixed --all-variants --gene-regions \
        --nucl-window-before 10 --nucl-window-after 10
    ```
    
-3. Save variants falling in a gene and differentially distributed (at least one true reference and true variant in all samples) with protein sequences including 5 amino acids before and after the variant.
+3. Save alleles falling in a gene and differentially distributed (at least one true reference and true mutated sample among all samples) with protein sequences including 5 amino acids before and after the allele.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
-       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
        --no-fixed --best-variants --gene-regions \
        --prot-window-before 5 --prot-window-after 5
    ```
    
-4. Save variants falling in a gene and differentially distributed between families (at least one true reference in a family and a true variant in the other) with protein sequences including 5 amino acids before and after each variant.
+4. Save alleles falling in a gene and differentially distributed between families (at least one true reference in a family and a true mutated sample in the other) with protein sequences including 5 amino acids before and after each allele.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
-       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
        --no-fixed --best-variants --gene-regions \
        --ped my_ped.ped --comparison families \
        --prot-window-before 5 --prot-window-after 5
    ```
    
-4. Save variants falling in a gene and differentially distributed in lineages (at least one true reference in a parent and a true variant in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
+4. Save alleles falling in a gene and differentially distributed in lineages (at least one true reference in a parent and a true mutated sample in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
-       --depth 5 --ratio-alt 0.8 --ratio-no-alt 0.2 \
+       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
        --no-fixed --best-variants --gene-regions \
        --ped my_ped.ped --comparison lineages \
        --max-missing 0.2 \

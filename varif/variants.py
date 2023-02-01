@@ -36,8 +36,8 @@ class Variants(object):
         n = self.vcf.headerlinenumber
         while n < len(self.vcf.vcffile):
             variant=Variant(self.vcf.vcffile[n], self.vcf.ranks, self.vcf.samples, samplesRanks, self.group1, self.group2)
-            variant.calculate_ratios()
-            variant.props_from_ratios()
+            variant.calculate_asps()
+            variant.app_from_asps()
 
             #Generate unique ID for each variant
             identifier=variant.chromosome+":"+variant.position
@@ -54,7 +54,7 @@ class Variants(object):
                 "categories":variant.categories,
                 "ref":variant.ref, "alts":variant.alts,
                 "refwindow":variant.refwindow,
-                "ratios":variant.ratios,
+                "asps":variant.asps,
                 "features":[],
                 "aaPosRef":{},
                 "aaPosAlts":{},

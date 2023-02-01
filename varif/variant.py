@@ -3,7 +3,7 @@ import numpy as np
 from .config import Config
 
 class Variant(object):
-    """A parsed line of a VCF, requiring AD for each sample."""
+    """A single line of a VCF file, requiring allele depth for each sample at each allele."""
     
     def __init__(self, vcfLine, ranks, samples, samplesRanks, group1, group2):
         """
@@ -18,16 +18,16 @@ class Variant(object):
         config (Config) : Existing configuration loaded initially by varif
         chromosome (str) : Name of chromosome
         position (str) : Position of variant
-        ref (str) : Reference sequence of variant starting at position
-        refwindow (list) : Bases before and after the reference sequence indicated in the VCF file
-        alts (list) : Alternate sequences at position
+        ref (str) : Reference allele
+        refwindow (list) : Bases before and after the reference sequence to be included
+        alts (list) : Alternate sequences at given position
         group1 (list) : Names of samples in first group of the comparison
         group2 (list) : Names of samples in second group of the comparison
-        counts (dict) : Key (sample name), value (AD count for ref and alts)
-        ratios (dict) : Key (sample name), value (ratio of AD for ref and alts)
+        counts (dict) : Key (sample name), value (AD of each sample for each allele including ref)
+        asps (dict) : Key (sample name), value (asp of each sample for each allele including ref)
         props (list) : True var and true ref prct of both groups for each alt
-        types (list) : Type of each variant among differential, fixed and ambiguous
-        categories (list) : Type of each variant at the given coordinates : 'SNP' or 'INDEL'
+        types (list) : Type of each alternate allele among differential, fixed and ambiguous
+        categories (list) : Type of each alternate allele at the given coordinates : 'SNP' or 'INDEL'
         log (list) : Log of the full variant (VCF line) and of each alt
 
         """
@@ -48,17 +48,17 @@ class Variant(object):
         self.group1=group1 if len(group1) > 0 else samples
         self.group2=group2 if len(group2) > 0 else samples
         self.counts={samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks) if samples[i] in self.group1+self.group2}
-        self.ratios={}
+        self.asps={}
         self.props=[]
         self.types=[]
         self.categories=[]   
         self.log=["",[]]
     
-    def calculate_ratios(self):
+    def calculate_asps(self):
         """
-        Get the ratio for each alternate count of the variant
+        Get the Allele Sample Proportion (ASP) for each sample at each allele including ref
 
-        return (dict) : Ratios for each ref and alts
+        return (dict) : ASPs for each sample
 
         """
         try:
@@ -70,72 +70,68 @@ class Variant(object):
         #Handling division by zero, when there is no ref
         for sample in self.counts:
             if sum(self.counts[sample]) < mindepth:
-                self.ratios[sample]=[math.nan]*len(self.counts[sample])
+                self.asps[sample]=[math.nan]*len(self.counts[sample])
             else:
-                self.ratios[sample]=[round(ad/sum(self.counts[sample]), 2) for ad in self.counts[sample]]
-        return self.ratios
+                self.asps[sample]=[round(ad/sum(self.counts[sample]), 2) for ad in self.counts[sample]]
+        return self.asps
 
-    def props_from_ratios(self):
+    def app_from_asps(self):
         """
-        Get the true var and true ref prct for each alt of the variant
+        Get the mutated and reference Allele Population Proportions using Allele Sample Proportions
 
         """
-        assert self.ratios != {}
-        #Value below which a ratio is not considered a True alt
-        minaaf=self.config.options["minaaf"]
-        #Value above which a ratio is not considered a True ref
-        maxraf=self.config.options["maxraf"]
-        minaaf=1-maxraf if minaaf is None else minaaf
+        assert self.asps != {}
+        #Value below which an asp is not considered a True mutation
+        minaltasp=self.config.options["minaltasp"]
+        #Value above which an asp is not considered a True reference
+        maxrefasp=self.config.options["maxrefasp"]
 
-        #Maximal proportion of missing (NA or mixed AF) in both groups
+        #Maximal proportion of missing or mixed asp in both groups
         maxmissing = self.config.options["maxMissing"]
-        #Minimal proportion of samples that are called true alt (differential groups only)
-        minvariants = self.config.options["minVariants"]
-        #Maximal ratio of the least number of alt samples over the other group alt samples (differential groups only)
-        ratiovariantdiff = self.config.options["maxSimilarity"]
-        assert 0 <= maxraf <= 1 and 0 <= minaaf <= 1, "Alternate AF (input:%s) and Reference AF (input:%s) must be proportions"%(minaaf, maxraf)
-        assert maxraf <= minaaf, "Reference AF should be <= to Alternate AF"
-        assert 0 <= maxmissing <= 1 and 0 <= minvariants <= 1 and 0 <= ratiovariantdiff <= 1, "Group filtering options must be proportions"
+        #Minimal proportion of samples that are have a true mutation (differential groups only)
+        minmutated = self.config.options["minMutations"]
+        #Maximal ratio of min(# of mutated samples)/max(# of mutated samples) (differential groups only)
+        ratiomutationdiff = self.config.options["maxSimilarity"]
         
         for rank in range(1,len(self.alts)+1):
-            ratioGroup1Rank=[self.ratios[sample][rank] for sample in self.group1]
-            ratioGroup2Rank=[self.ratios[sample][rank] for sample in self.group2]
+            aspGroup1Rank=[self.asps[sample][rank] for sample in self.group1]
+            aspGroup2Rank=[self.asps[sample][rank] for sample in self.group2]
             #No sample is above depth
-            if all(np.isnan(ratio) for ratio in ratioGroup1Rank):
-                ming1ratio=math.nan
-                maxg1ratio=math.nan
+            if all(np.isnan(asp) for asp in aspGroup1Rank):
+                ming1asp=math.nan
+                maxg1asp=math.nan
             else:
-                ming1ratio=np.nanmin(ratioGroup1Rank)
-                maxg1ratio=np.nanmax(ratioGroup1Rank)
-            if all(np.isnan(ratio) for ratio in ratioGroup2Rank):
-                ming2ratio=math.nan
-                maxg2ratio=math.nan
+                ming1asp=np.nanmin(aspGroup1Rank)
+                maxg1asp=np.nanmax(aspGroup1Rank)
+            if all(np.isnan(asp) for asp in aspGroup2Rank):
+                ming2asp=math.nan
+                maxg2asp=math.nan
             else:
-                ming2ratio=np.nanmin(ratioGroup2Rank)
-                maxg2ratio=np.nanmax(ratioGroup2Rank)
+                ming2asp=np.nanmin(aspGroup2Rank)
+                maxg2asp=np.nanmax(aspGroup2Rank)
             
-            propg1supp=len([supptominaaf for supptominaaf in ratioGroup1Rank if supptominaaf>=minaaf])/len(ratioGroup1Rank)
-            propg1infe=len([infetomaxraf for infetomaxraf in ratioGroup1Rank if infetomaxraf<=maxraf])/len(ratioGroup1Rank)
-            propg2supp=len([supptominaaf for supptominaaf in ratioGroup2Rank if supptominaaf>=minaaf])/len(ratioGroup2Rank)
-            propg2infe=len([infetomaxraf for infetomaxraf in ratioGroup2Rank if infetomaxraf<=maxraf])/len(ratioGroup2Rank)
+            propg1supp=len([supptominaltasp for supptominaltasp in aspGroup1Rank if supptominaltasp>=minaltasp])/len(aspGroup1Rank)
+            propg1infe=len([infetomaxrefasp for infetomaxrefasp in aspGroup1Rank if infetomaxrefasp<=maxrefasp])/len(aspGroup1Rank)
+            propg2supp=len([supptominaltasp for supptominaltasp in aspGroup2Rank if supptominaltasp>=minaltasp])/len(aspGroup2Rank)
+            propg2infe=len([infetomaxrefasp for infetomaxrefasp in aspGroup2Rank if infetomaxrefasp<=maxrefasp])/len(aspGroup2Rank)
             
             self.props.append([round(100*propg1supp), round(100*propg1infe), round(100*propg2supp), round(100*propg2infe)])
 
             missingg1 = 1 - propg1infe - propg1supp
             missingg2 = 1 - propg2infe - propg2supp
-            #fixed alternate or reference
-            if ming1ratio >= minaaf and ming2ratio >= minaaf or (maxg1ratio <= maxraf and maxg2ratio <= maxraf):
+            #fixed mutation or reference
+            if ming1asp >= minaltasp and ming2asp >= minaltasp or (maxg1asp <= maxrefasp and maxg2asp <= maxrefasp):
                 if max(missingg1, missingg2) <= maxmissing:
                     self.types.append("fixed")
                 else:
                     self.types.append("ambiguous")
-            #True Alt
-            elif ming1ratio <= maxraf and maxg2ratio >= minaaf or (ming2ratio <= maxraf and maxg1ratio >= minaaf):
-                propvariantdiff = min(propg1supp,propg2supp) / max(propg1supp,propg2supp)
-                if max(missingg1, missingg2) <= maxmissing and max(propg1supp,propg2supp) >= minvariants and propvariantdiff <= ratiovariantdiff:
+            #True mutational difference between groups
+            elif ming1asp <= maxrefasp and maxg2asp >= minaltasp or (ming2asp <= maxrefasp and maxg1asp >= minaltasp):
+                propmutationdiff = min(propg1supp,propg2supp) / max(propg1supp,propg2supp)
+                if max(missingg1, missingg2) <= maxmissing and max(propg1supp,propg2supp) >= minmutated and propmutationdiff <= ratiomutationdiff:
                     self.types.append("differential")
                 else:
                     self.types.append("ambiguous")
-            #Ambiguous variants
+            #Ambiguous alternate alleles
             else:
                 self.types.append("ambiguous")

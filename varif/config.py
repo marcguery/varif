@@ -6,9 +6,9 @@ class Config(object):
     @staticmethod
     def set_options():
         parser = argparse.ArgumentParser(description='''
-            Filter and annotate variants likely to be
-            differentially expressed (or fixed) among your sample(s)
-            wih varif.
+            Filter and annotate alleles likely to be
+            differentially mutated among samples by comparing 
+            their Allele Sample Proportions (ASPs)
             ''', formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=30))
         
         parser.add_argument('-vcf', type=str, default=None,
@@ -30,18 +30,18 @@ class Config(object):
         parser.add_argument('--ped', type=str, default=None,
         metavar="FILE",
         help='PED file')
-        parser.add_argument('--comparison', dest='comparison', type=str, default=None,
-        metavar="GROUP", help='Compare variants between "families", "lineages" or "both"')
+        parser.add_argument('--comparison', dest='comparison', type=str, default="all",
+        metavar="GROUP", help='Compare variants between "families", "lineages", "both" or "all"')
 
         parser.add_argument('--fixed', dest='fixed', action='store_true',
         help='Add population-fixed variants in the result')
         parser.add_argument('--no-fixed', dest='fixed', action='store_false',
-        help='Do not add population-fixed variants in the result')
+        help='Do not add population-fixed mutations in the result')
 
         parser.add_argument('--all-variants', dest='allVariants', action='store_true',
-        help='Add all variants in the result (including fixed)')
+        help='Add all variants in the result (including fixed mutations)')
         parser.add_argument('--best-variants', dest='allVariants', action='store_false',
-        help='Add only differentially expressed variants')
+        help='Add only differentially mutated alleles in the main output (the whole variant for the output VCF)')
 
         parser.add_argument('--all-regions', dest='allRegions', action='store_true',
         help='Add variants from all regions of the genome')
@@ -51,36 +51,36 @@ class Config(object):
 
         parser.add_argument('--nucl-window-before', dest='nuclWindowBefore', type=int, default=0,
         metavar="INT",
-        help='Number of bases before the variant to be included')
+        help='Number of bases to include before the allele')
         parser.add_argument('--nucl-window-after', dest='nuclWindowAfter', type=int, default=0,
         metavar="INT",
-        help='Number of bases after the variant to be included')
+        help='Number of bases to include after the allele')
         parser.add_argument('--prot-window-before', dest='protWindowBefore', type=int, default=0,
         metavar="INT",
-        help='Number of amino acids before the variant to be included')
+        help='Number of amino acids to include before the allele')
         parser.add_argument('--prot-window-after', dest='protWindowAfter', type=int, default=0,
         metavar="INT",
-        help='Number of amino acids after the variant to be included')
+        help='Number of amino acids to include after the allele')
 
         parser.add_argument('--depth', dest='mindepth', type=int, default=5,
         metavar="DEPTH",
-        help='Minmal total read depth for a alt to be considered')
-        parser.add_argument('--ratio-alt', dest='minaaf', type=float, default=0.8,
-        metavar="AAF",
-        help='Minmal ratio of alt/total depth to call it true alt')
-        parser.add_argument('--ratio-no-alt', dest='maxraf', type=float, default=0.2,
-        metavar="RAF",
-        help='Maximal ratio of alt/total depth to call it true ref')
+        help='Minimal read depth for a sample variant to be considered')
+        parser.add_argument('--ratio-alt', dest='minaltasp', type=float, default=0.8,
+        metavar="ASP",
+        help='Minimal sample propotion of allele/total read depth to consider it fixed')
+        parser.add_argument('--ratio-ref', dest='maxrefasp', type=float, default=0.2,
+        metavar="ASP",
+        help='Maximal sample propotion of allele/total read depth to ignore it')
 
         parser.add_argument('--max-missing', dest='maxMissing', type=float, default=1,
         metavar="PROP",
-        help='Maximal proportion of missing genotypes (low depth or mixed AF) in each group')
+        help='Maximal proportion of missing or mixed ASP in each group')
         parser.add_argument('--max-similarity', dest='maxSimilarity', type=float, default=1,
         metavar="PROP",
-        help='Maximal ratio of min(mut samples)/max(mut samples) between groups (non fixed variant)')
-        parser.add_argument('--min-variants', dest='minVariants', type=float, default=0,
+        help='Maximal ratio of min(mutated samples)/max(mutated samples) between groups (non fixed mutations)')
+        parser.add_argument('--min-mutated', dest='minMutations', type=float, default=0,
         metavar="PROP",
-        help='Minimal proportion of samples that are mutated in the variant group (non fixed variant)')
+        help='Minimal proportion of mutated samples in the most mutated group (non fixed mutations)')
 
         parser.add_argument('--output-vcf', dest='outputVcf', action='store_true',
         help='Whether to output filtered VCF files or not')

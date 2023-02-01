@@ -52,10 +52,10 @@ class Connection(object):
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
         if arguments["comparison"] is not None:
-            allowed_values=["families", "lineages", "both"]
+            allowed_values=["families", "lineages", "both", "all"]
             if arguments["comparison"] not in allowed_values:
                 raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
-            if arguments["ped"] is None:
+            if arguments["ped"] is None and arguments["comparison"] != "all":
                 raise NameError("Argument 'ped' is required when comparing groups ('%s' comparison)"%(arguments["comparison"]))
         for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
             if arguments[arg] < 0:
@@ -63,6 +63,10 @@ class Connection(object):
         for arg in ["protWindowBefore", "protWindowAfter"]:
             if arguments[arg] < 0:
                 raise ValueError("Protein window '%s' must be above 0, not %s"%(arg, arguments[arg]))
+        for arg in ["minaltasp", "maxrefasp", "maxMissing", "maxSimilarity", "minMutations"]:
+            if not 0 <= arguments[arg] <= 1:
+                raise ValueError("Filtering option '%s' must be a proportion, was %s"%(arg, arguments[arg]))
+        assert arguments["maxrefasp"] <= arguments["minaltasp"], "Reference ASP (was %s) should be <= to Alternate ASP (was %s)"%(arguments["maxrefasp"], arguments["minaltasp"])
         if len(arguments["outFile"].split("/")[-1]) > 100:
             raise ValueError("Name of the outfile must not exceed 100 characters")
         print("Running Varif %s with options \n%s"%(__version__, "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
@@ -154,7 +158,7 @@ class Connection(object):
     
     def define_categories(self, allvariants, variantId):
         """
-        Determine if the variant is a SNP or INDEL and add genomic location
+        Determine if the variant alleles are a SNP or INDEL and add genomic location
 
         allvariants (Variants) : Current variants processed
         variantId (str) : Unique identifier of the variant
@@ -220,8 +224,8 @@ class Connection(object):
                 content[8]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
             annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
             content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
-            for i, sample in enumerate(allvariants.samples):#samples alt ratios
-                content[11+i]=str(allvariants.variants[variantId]["ratios"][sample][altIndex+1])
+            for i, sample in enumerate(allvariants.samples):#asps
+                content[11+i]=str(allvariants.variants[variantId]["asps"][sample][altIndex+1])
             line=sep.join(content)+"\n"
         return line
         
@@ -299,7 +303,7 @@ class Connection(object):
         """
         Get the processed variants for each combination of groups to be compared and output them
 
-        comparison (str) : Group samples by family ('families'), lineage ('lineages'), both ('both') or none
+        comparison (str) : Group samples by family ('families'), lineage ('lineages'), both ('both') or all against all ('all')
         fixed (bool) : Show also fixed variants if True
         allVariants (bool) : Show all variants if True (even fixed)
         allRegions (bool) : Show not only CDS if True
