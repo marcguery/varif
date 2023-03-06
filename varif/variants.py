@@ -1,3 +1,4 @@
+from sys import stderr
 from .variant import Variant
 
 class Variants(object):
@@ -21,6 +22,31 @@ class Variants(object):
     @property
     def samples(self):
         return sorted(list(set(self.group1+self.group2)))
+    
+    def check_samples(self):
+        """
+        Check if the sample names from the comparison groups are present in the VCF file
+
+        return (list) : List of unique samples in group1 and group2
+
+        """
+        errors=[]
+        warnings=[]
+        groups=[self.group1, self.group2]
+        if len(set(self.samples) - set(self.vcf.samples)) > 0:
+            for index, group in enumerate(groups):
+                groupmissing=set(group) - set(self.vcf.samples)
+                if len(groupmissing) == len(group):
+                    errors.append("No sample (%s) from one comparison group are present in the VCF file"%(", ".join(g for g in group)))
+                elif len(groupmissing) > 0:
+                    warnings.append("Some samples (%s) from one comparison group are absent in the VCF file"%(", ".join(g for g in groupmissing)))
+                    groups[index] = list(set(groups[index])-set(groupmissing))
+
+        if len(warnings) >  0:
+            print("\n".join(warning for warning in warnings), file = stderr)
+        if len(errors) > 0:
+            raise NameError("\n".join(error for error in errors))
+        return(groups)
 
     def process_variants(self, group1 = [], group2 = []):
         """
@@ -32,6 +58,7 @@ class Variants(object):
         """
         self.group1=group1 if len(group1) > 0 else self.vcf.samples
         self.group2=group2 if len(group2) > 0 else self.vcf.samples
+        self.group1, self.group2 = self.check_samples()
         samplesRanks=[self.vcf.vcfHeaderSorted[sample] for sample in self.vcf.samples]
         n = self.vcf.headerlinenumber
         while n < len(self.vcf.vcffile):

@@ -37,11 +37,15 @@ class Families(object):
             sex=data[4]
             genotype=data[5]
             if family in self.families:
-                self.families[family].append(sample)
+                if sample not in self.families[family]:
+                    self.families[family].append(sample)
+                else:
+                    raise ValueError("Sample %s from family %s is duplicated! Remove the duplicated lines or change the family/sample identifier"%(sample, family))
             else:
                 self.families[family] = [sample]
             if parent in self.parents:
-                self.parents[parent].append(sample)
+                if sample not in self.parents[parent]:
+                    self.parents[parent].append(sample)
             else:
                 self.parents[parent] = [sample]
             self.samples.append(sample)
