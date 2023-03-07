@@ -153,7 +153,7 @@ Differentially distributed alleles can either have the first and the fourth perc
 
 Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a mixed allele).
 
-# Additional information
+# Sequence annotations
 
 ## Up and downstream genomic sequences
 
@@ -178,6 +178,12 @@ When the allele is inside a CDS, `varif` will predict the new CDS sequence with 
 Finally, reference bases located within introns are removed before being replaced by the mutated sequence. For now, as no base from mutated sequence are removed, it is possible that bases which are actually part of an intron are included in the mutated CDS.
 
 Amino acids affected by the reference and alternate sequence are obtained by translating the initial and mutated CDS respectively. Additional codons can be added in a chosen window with `--prot-window-before` and `--prot-window-after` options; limited to the first and last codon (or when a stop codon is obtained). The position of the codon is then calculated from their rank from the beginning of the initial and mutated CDS and shown in the AAref and AAalt columns of the CSV file. The codon positions are associated with the total number of codons in each CDS, including the stop codon.
+
+# Multiprocessing (beta)
+
+The most time consuming step of the pipeline is when the ASPs are calculated. Multiple processes calculating ASPs for sets of VCF lines can be launched with the option `--ncores` (1 by default).
+
+**It is unnecessary/counterproductive to allocate too much cores (8 might suffice in most cases) as processes need to access to a shared memory by (bad) design.** There is still room for improvement in execution times as one should expect `varif` to be 2 to 3 times faster at most with parallel processing.
 
 # Limitations
 

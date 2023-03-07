@@ -6,6 +6,7 @@ from .families import Families
 from .annotations import Annotations
 from .fasta import Fasta
 from .version import __version__
+import time
 
 
 class Connection(object):
@@ -22,6 +23,8 @@ class Connection(object):
         fasta (Fasta) : Fasta object
 
         """
+
+        start_time = time.time()
         Config.set_options()
         self.check_arguments(Config.options)
         self.vcf = Vcf()
@@ -33,6 +36,7 @@ class Connection(object):
         self.annotations.load_annotations_from_GFF(Config.options['gff'])
         self.fasta=Fasta()
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
+        print("Data loaded in %s seconds"%(round(time.time() - start_time)))
         self.get_all_groups(
             comparison=Config.options["comparison"],fixed=Config.options["fixed"], 
             allVariants=Config.options["allVariants"],allRegions=Config.options["allRegions"],
@@ -260,6 +264,8 @@ class Connection(object):
         filteredvcf (str) : File path of the filtered VCF
 
         """
+
+        start_time = time.time()
         fixed=True if allVariants is True else fixed
         sortedKeys=sorted(allvariants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         #Headers
@@ -293,6 +299,8 @@ class Connection(object):
                 if allvariants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
                     vcfcorrespondingline=allvariants.variants[key]["vcfline"]
                     filteredvcfcontent+=allvariants.vcf.vcffile[vcfcorrespondingline-1]
+        
+        print("Annotations found in %s seconds"%(round(time.time() - start_time)))
         with open(csv, 'w') as f:
             f.write(printedLine)
         if filteredvcf is not None:
@@ -316,7 +324,7 @@ class Connection(object):
 
         if not compare_families and not compare_lineages:
             allvariants=Variants(self.vcf)
-            allvariants.process_variants()
+            allvariants.process_variants(procs = Config.options["ncores"])
             csv = outFile+".csv"
             filteredvcf = outFile+".vcf" if outputVcf else None
             
@@ -338,7 +346,7 @@ class Connection(object):
 
                     print("Group comparison of families %s (id : %i) and %s (id: %i)"%(family1, family_id, family2, other_family_id))
                     allvariants=Variants(self.vcf)
-                    allvariants.process_variants(group1, group2)
+                    allvariants.process_variants(group1, group2, procs = Config.options["ncores"])
                     outFileInfo = outFile + "-"+family1+"_with_"+family2 if not long_names else outFile + "-"+str(family_id)+"_with_"+str(other_family_id)
                     csv = outFileInfo+".csv"
                     filteredvcf = outFileInfo+".vcf" if outputVcf else None
@@ -366,7 +374,7 @@ class Connection(object):
 
                 print("Group comparison of parent%s %s%s%s (id : %i) with their offspring"%(plural[0], mate1, plural[1], mate2, index))
                 allvariants=Variants(self.vcf)
-                allvariants.process_variants(group1, group2)
+                allvariants.process_variants(group1, group2, procs = Config.options["ncores"])
                 outFileInfo = outFile + "-"+mate1+addingmates+mate2+"_with_offspring" if not long_names else outFile + "-"+str(index)+"_with_offspring"
                 csv = outFileInfo+".csv"
                 filteredvcf = outFileInfo+".vcf" if outputVcf else None

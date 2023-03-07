@@ -27,6 +27,10 @@ class Config(object):
         metavar="FILENAME",
         help='Name of the main output file (no extension) that will be appended with the group names')
 
+        parser.add_argument('--ncores', dest='ncores', type=int, default=1,
+        metavar="CORES",
+        help='Number of parallel jobs to run')
+
         parser.add_argument('--ped', type=str, default=None,
         metavar="FILE",
         help='PED file')
