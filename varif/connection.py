@@ -56,7 +56,7 @@ class Connection(object):
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
         if arguments["comparison"] is not None:
-            allowed_values=["families", "lineages", "both", "all"]
+            allowed_values=["families", "lineages", "selfself", "all"]
             if arguments["comparison"] not in allowed_values:
                 raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
             if arguments["ped"] is None and arguments["comparison"] != "all":
@@ -319,10 +319,11 @@ class Connection(object):
         outputVcf (bool) : Whether to ouput the corresponding VCF for each combination of groups compared
 
         """
-        compare_families = True if comparison in ["both", "families"] else False
-        compare_lineages = True if comparison in ["both", "lineages"] else False
+        compare_families = True if comparison == "families" else False
+        compare_lineages = True if comparison == "lineages" else False
+        compare_selfself = True if comparison == "selfself" else False
 
-        if not compare_families and not compare_lineages:
+        if not compare_families and not compare_lineages and not compare_selfself:
             allvariants=Variants(self.vcf)
             allvariants.process_variants(procs = Config.options["ncores"])
             csv = outFile+".csv"
@@ -379,4 +380,23 @@ class Connection(object):
                 csv = outFileInfo+".csv"
                 filteredvcf = outFileInfo+".vcf" if outputVcf else None
 
+                self.get_all_variants(allvariants, fixed, allVariants, allRegions, csv, filteredvcf)
+        
+        if compare_selfself:
+            families = list(self.families.families.keys())
+            long_names = True if max([len(samplename) for samplename in families]) > 30 else False
+            if long_names:
+                print("Sample names exceed the limit of 30 characters, will use index instead for file names", file = stderr)
+            assert len(families) > 0, "There are no families in the PED file"
+
+            for family_id in range(0,len(families)):
+                family = families[family_id]
+                group = self.families.families[family]
+                print("Self-self comparison of family %s (id : %i)"%(family, family_id))
+                allvariants=Variants(self.vcf)
+                allvariants.process_variants(group, group, procs = Config.options["ncores"])
+                outFileInfo = outFile + "-"+family if not long_names else outFile + "-"+str(family_id)
+                csv = outFileInfo+".csv"
+                filteredvcf = outFileInfo+".vcf" if outputVcf else None
+                
                 self.get_all_variants(allvariants, fixed, allVariants, allRegions, csv, filteredvcf)

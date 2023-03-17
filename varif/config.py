@@ -35,7 +35,7 @@ class Config(object):
         metavar="FILE",
         help='PED file')
         parser.add_argument('--comparison', dest='comparison', type=str, default="all",
-        metavar="GROUP", help='Compare variants between "families", "lineages", "both" or "all"')
+        metavar="GROUP", help='Compare variants between "families", "lineages", "selfself" or "all"')
 
         parser.add_argument('--fixed', dest='fixed', action='store_true',
         help='Add population-fixed variants in the result')
@@ -81,7 +81,7 @@ class Config(object):
         help='Maximal proportion of missing or mixed ASP in each group')
         parser.add_argument('--max-similarity', dest='maxSimilarity', type=float, default=1,
         metavar="PROP",
-        help='Maximal ratio of min(mutated samples)/max(mutated samples) between groups (non fixed mutations)')
+        help='Maximal ratio of min(mutated samples prop)/max(mutated samples prop) between groups (non fixed mutations)')
         parser.add_argument('--min-mutated', dest='minMutations', type=float, default=0,
         metavar="PROP",
         help='Minimal proportion of mutated samples in the most mutated group (non fixed mutations)')

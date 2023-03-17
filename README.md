@@ -58,7 +58,7 @@ The FASTA file containing one sequence per chromosome.
 
 The optional PED file containing the family membership and parental relationships between samples from the VCF file. This file should be formatted as described in https://zzz.bwh.harvard.edu/plink/data.shtml#ped.
 
-# Summary
+# Overview
 
 Use `varif` to filter and annotate variants submitted through a VCF file.
 
@@ -98,6 +98,17 @@ The output CSV file separated by semicolons contains:
 
 Note that when the CDSalt field is empty and that the AAalt field contains '*(0/0)*', this means that both reference and mutated CDS sequences are identical (this can happen when an INDEL occurs at the edge of a CDS and an intron).
 
+## <a name="groups"></a>Sample groups
+
+Samples groups are used to determine which allele is differentially distributed based on the presence of true mutated samples and true reference samples between two groups. It is possible to separate samples into groups and look for alleles differentially distributed between those groups by providing the option `--comparison` with one of the keywords *families*,*selfself*, *lineages*, or *all* (the default). Samples are grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution can be compared:
+
+- between every combination of families (*families*),
+- within all members of each family (*selfself*),
+- between direct parents and offspring  (*lineages*),
+- or all-against-all VCF samples (*all*).
+
+The relationship between the two groups is symmetrical, meaning that alleles present in either group are candidates for being considered differentially distributed (see [Allelic distribution](#alleledistrib) for more information).
+
 # Filters
 
 ## Allele Sample Proportions (ASP)
@@ -114,15 +125,25 @@ If the ASP is above minAltASP, the allele is considered a true mutation, while i
 
 The ASPs are calculated only if the sample read depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
 
-## <a name="groups"></a>Sample groups
+## Missing data
 
-Samples groups are used to determine which allele is differentially distributed based on the presence of true mutated samples and true reference samples between two groups. It is possible to separate samples into groups and look for alleles differentially distributed between those groups by providing the option `--comparison` with one of the keywords *families*, *lineages*, *both* or *all* (the default). Samples can thus be grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution will be compared in every combination of families and/or direct parent versus offspring; or all-against-all (default). The relationship between the two groups is symmetrical, meaning that alleles present in either group are candidates for being considered differentially distributed.
+Variants with too many missing genotypes (because of insufficient depth or a mixed ASP) can be filtered out with `--max-missing` (default 1) which discards alleles if one group has more missing genotypes than the selected proportion.
 
-Groups with too many missing genotypes (because of insufficient depth or a mixed ASP) can be filtered out with `--max-missing` (default 1) which discards alleles if one group has more missing genotypes than the selected proportion.
-
-Group-specific alleles can be selected with the option `--max-similarity` (default 1) by providing the maximal proportion of the number of mutated samples between the group with less mutated samples over the one with the most mutated samples.
+## Rare alleles
 
 Alleles that are too rare can be filtered out by the option `--min-mutated` (default 0) which will discard alleles that are present in less than this proportion of the number of samples in both group.
+
+## Group similarity
+
+Group-specific alleles can be selected with the option `--max-similarity` (default 1) by providing the maximal ratio of the mutant proportion of the less mutated group over the mutant proportion of the most mutated group. 
+
+For example, a value of 0.2 will select only alleles with a proportion of mutated samples that is at least 5 times higher in one group compared to the other.
+
+## Genetic regions
+
+By default, all genomic regions are included with the option `--all-regions`. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--gene-regions`.
+
+# <a name="app"></a>Allele Population Proportions
 
 The combination of ASPs are used to classify alleles that are:
 
@@ -132,13 +153,7 @@ The combination of ASPs are used to classify alleles that are:
   All ASPs of the samples are above or equal to minVSP or below or equal to maxRSP. Either the option `--all-variants` or `--fixed` will show these alleles.
 - Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these alleles while the option `--best-variants` will omit them. Note that the whole variant (with all alternate alleles merged in a single line) will be saved in the VCF file even if only one allele is passing the filters.
 
-## Specific regions
-
-By default, all genomic regions are included with the option `--all-regions`. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--gene-regions`.
-
-## <a name="app"></a>Allele Population Proportions
-
-The Allele Population Proportions displayed at the Proportions column of the CSV file is made of four different percentages separated by a ':' corresponding respectively to:
+The exact proportion of mutated and reference alleles in both groups, refer to as 'Allele Population Proportions', is displayed at the Proportions column of the CSV file. There are 4 different percentages separated by a ':' corresponding respectively to:
 
 - the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true mutation
 - the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true reference
@@ -179,13 +194,17 @@ Finally, reference bases located within introns are removed before being replace
 
 Amino acids affected by the reference and alternate sequence are obtained by translating the initial and mutated CDS respectively. Additional codons can be added in a chosen window with `--prot-window-before` and `--prot-window-after` options; limited to the first and last codon (or when a stop codon is obtained). The position of the codon is then calculated from their rank from the beginning of the initial and mutated CDS and shown in the AAref and AAalt columns of the CSV file. The codon positions are associated with the total number of codons in each CDS, including the stop codon.
 
-# Multiprocessing (beta)
+# Multiprocessing
 
 The most time consuming step of the pipeline is when the ASPs are calculated. Multiple processes calculating ASPs for sets of VCF lines can be launched with the option `--ncores` (1 by default).
 
-**It is unnecessary/counterproductive to allocate too much cores (8 might suffice in most cases) as processes need to access to a shared memory by (bad) design.** There is still room for improvement in execution times as one should expect `varif` to be 2 to 3 times faster at most with parallel processing.
-
 # Limitations
+
+## Performance
+
+**It is unnecessary/counterproductive to allocate too much cores (4 might suffice in most cases) as processes need to access to a shared memory by (bad) design.** There is still room for improvement in execution times as one should expect `varif` to be 2 to 3 times faster at most with parallel processing.
+
+For large VCF files (around 500 000 lines), regardless of the number of samples, RAM requirement can be quite substantial.
 
 ## Multi allelic CDS
 
