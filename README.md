@@ -113,13 +113,13 @@ The relationship between the two groups is symmetrical, meaning that alleles pre
 
 ## Allele Sample Proportions (ASP)
 
-There are 2 cut-offs of minimal alternate ASP (minAltASP with `--ratio-alt`) and maximal reference ASP (maxRefASP with `--ratio-ref`) used by `varif` to determine if alleles are differentially distributed in a population. By default, minAltASP is equal to 0.8 and maxRefASP to 0.2.
+There are 2 cut-offs of minimal alternate ASP (minVSP with `--ratio-alt`) and maximal reference ASP (maxRSP with `--ratio-ref`) used by `varif` to determine if alleles are differentially distributed in a population. By default, minVSP is equal to 0.8 and maxRSP to 0.2.
 
 For each allele and for each sample, the ASP is calculated using the different allele read depths (ARD):
 
 ***ASP*** = (*alternate ARD*) / (*all alternates ARD* + *reference ARD*)
 
-If the ASP is above minAltASP, the allele is considered a true mutation, while if the ASP is below maxRefASP, it is considered a true reference. When the ASP is between maxRefASP and minAltASP, the genotype cannot be called and the allele is mixed.
+If the ASP is above minVSP, the locus is considered to carry the alternate allele only, while if the ASP is below maxRSP, it is considered to not carry the alternate allele at all. When the ASP is between maxRSP and minVSP, the genotype cannot be called and the locus is mixed.
 
 ## Minimal depth
 
@@ -148,21 +148,21 @@ By default, all genomic regions are included with the option `--all-regions`. Ho
 The combination of ASPs are used to classify alleles that are:
 
 - Differentially distributed between two groups:
-  At least one ASP of one group is a true reference (below or equal to maxRSP) and at least one ASP of the other group is a true mutation (above or equal to minVSP).
+  At least one ASP of one group is below or equal to maxRSP (does not contain the alternate allele) and at least one ASP of the other group is above or equal to minVSP (contains the alternate allele).
 - Fixed in the population:
   All ASPs of the samples are above or equal to minVSP or below or equal to maxRSP. Either the option `--all-variants` or `--fixed` will show these alleles.
 - Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these alleles while the option `--best-variants` will omit them. Note that the whole variant (with all alternate alleles merged in a single line) will be saved in the VCF file even if only one allele is passing the filters.
 
 The exact proportion of mutated and reference alleles in both groups, refer to as 'Allele Population Proportions', is displayed at the Proportions column of the CSV file. There are 4 different percentages separated by a ':' corresponding respectively to:
 
-- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true mutation
-- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the allele is a true reference
-- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true mutation
-- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the allele is a true reference
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the locus *is* the alternate allele
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the locus *is not* the alternate allele
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the locus *is* the alternate allele
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the locus *is not* the alternate allele
 
 Note that when the `--comparison` option is set to *all*, the third and fourth percentages are equal to the first and second.
 
-As a result, fixed allele can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed allele in the population).
+As a result, a fixed allele can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed allele in the population).
 
 Differentially distributed alleles can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (allele present in at least one sample from one group and absent from at least one sample from the other group).
 
@@ -241,7 +241,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
        --nucl-window-before 10 --nucl-window-after 10
    ```
    
-3. Save alleles falling in a gene and differentially distributed (at least one true reference and true mutated sample among all samples) with protein sequences including 5 amino acids before and after the allele.
+3. Save alleles falling in a gene and differentially distributed (at least one sample with the allele and one sample without it among all samples) with protein sequences including 5 amino acids before and after the allele.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
@@ -251,7 +251,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
        --prot-window-before 5 --prot-window-after 5
    ```
    
-4. Save alleles falling in a gene and differentially distributed between families (at least one true reference in a family and a true mutated sample in the other) with protein sequences including 5 amino acids before and after each allele.
+4. Save alleles falling in a gene and differentially distributed between families (at least one sample with the allele in a family and one sample without it in another one) with protein sequences including 5 amino acids before and after each allele.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
@@ -262,7 +262,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
        --prot-window-before 5 --prot-window-after 5
    ```
    
-4. Save alleles falling in a gene and differentially distributed in lineages (at least one true reference in a parent and a true mutated sample in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
+4. Save alleles falling in a gene and differentially distributed in lineages (at least one sample with the allele in a parent and one sample without it in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
 
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \

@@ -229,7 +229,7 @@ class Connection(object):
             annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
             content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
             for i, sample in enumerate(allvariants.samples):#asps
-                content[11+i]=str(allvariants.variants[variantId]["asps"][sample][altIndex+1])
+                content[11+i]='{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
             line=sep.join(content)+"\n"
         return line
         

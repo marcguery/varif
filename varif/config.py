@@ -71,10 +71,10 @@ class Config(object):
         help='Minimal read depth for a sample variant to be considered')
         parser.add_argument('--ratio-alt', dest='minaltasp', type=float, default=0.8,
         metavar="ASP",
-        help='Minimal sample propotion of allele/total read depth to consider it fixed')
+        help='Minimal sample proportion of allele/total read depth to ignore other alleles')
         parser.add_argument('--ratio-ref', dest='maxrefasp', type=float, default=0.2,
         metavar="ASP",
-        help='Maximal sample propotion of allele/total read depth to ignore it')
+        help='Maximal sample proportion of allele/total read depth to ignore it')
 
         parser.add_argument('--max-missing', dest='maxMissing', type=float, default=1,
         metavar="PROP",

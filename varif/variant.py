@@ -72,7 +72,7 @@ class Variant(object):
             if sum(self.counts[sample]) < mindepth:
                 self.asps[sample]=[math.nan]*len(self.counts[sample])
             else:
-                self.asps[sample]=[round(ad/sum(self.counts[sample]), 2) for ad in self.counts[sample]]
+                self.asps[sample]=[round(ad/sum(self.counts[sample]), 6) for ad in self.counts[sample]]
         return self.asps
 
     def app_from_asps(self):
