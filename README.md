@@ -68,12 +68,12 @@ Alleles passing the filters will be stored in a CSV file (multiple alleles at th
 
 Here is an example of the  `varif` main output obtained with default parameters:
 
-| Chromosome | Position | Type                     | Ref  | Alt  | CDSref           | CDSalt   | AAref      | AAalt       | Annotation                   | Proportions       | S1   | S2   | S3   |
-| ---------- | -------- | ------------------------ | ---- | ---- | ---------------- | -------- | ---------- | ----------- | ---------------------------- | ----------------- | ---- | ---- | ---- |
-| Chr1       | 123123   | SNP                      | C    | G    | NA               | NA       | NA         | NA          | NA                           | `067:033:067:033` | 0.91 | 0    | 1    |
-| Chr1       | 456456   | SNP,gene,mRNA            | T    | A    | NA               | NA       | NA         | NA          | Unknown function (gene_id_1) | `033:033:033:033` | 0.54 | 0    | 1    |
-| Chr2       | 123123   | SNP,CDS,exon,gene,mRNA   | G    | T    | AAGCG (CDS_id_2) | AATCG    | L (45/458) | I (45/458)  | Unknown function (gene_id_2) | `000:067:000:067` | NA   | 0    | 0.14 |
-| Chr3       | 123456   | INDEL,CDS,exon,gene,mRNA | G    | GATA | ATGAT (CDS_id_3) | ATGATAAT | D (52/123) | DN (52/124) | Unknown function (gene_id_3) | `000:100:000:100` | 0    | 0.12 | 0    |
+| Chromosome | Position | Type                     | Ref  | Alt  | CDSref           | CDSalt   | AAref      | AAalt       | Annotation                   | Proportions       | S1       | S2       | S3       |
+| ---------- | -------- | ------------------------ | ---- | ---- | ---------------- | -------- | ---------- | ----------- | ---------------------------- | ----------------- | -------- | -------- | -------- |
+| Chr1       | 123123   | SNP                      | C    | G    | NA               | NA       | NA         | NA          | NA                           | `067:033:067:033` | 0.912643 | 0.000000 | 1.000000 |
+| Chr1       | 456456   | SNP,gene,mRNA            | T    | A    | NA               | NA       | NA         | NA          | Unknown function (gene_id_1) | `033:033:033:033` | 0.540000 | 0.000000 | 1.000000 |
+| Chr2       | 123123   | SNP,CDS,exon,gene,mRNA   | G    | T    | AAGCG (CDS_id_2) | AATCG    | L (45/458) | I (45/458)  | Unknown function (gene_id_2) | `000:067:000:067` | NA       | 0.000000 | 0.140000 |
+| Chr3       | 123456   | INDEL,CDS,exon,gene,mRNA | G    | GATA | ATGAT (CDS_id_3) | ATGATAAT | D (52/123) | DN (52/124) | Unknown function (gene_id_3) | `000:100:000:100` | 0.000000 | 0.120000 | 0.000000 |
 
 ## CSV content
 
@@ -194,17 +194,11 @@ Finally, reference bases located within introns are removed before being replace
 
 Amino acids affected by the reference and alternate sequence are obtained by translating the initial and mutated CDS respectively. Additional codons can be added in a chosen window with `--prot-window-before` and `--prot-window-after` options; limited to the first and last codon (or when a stop codon is obtained). The position of the codon is then calculated from their rank from the beginning of the initial and mutated CDS and shown in the AAref and AAalt columns of the CSV file. The codon positions are associated with the total number of codons in each CDS, including the stop codon.
 
-# Multiprocessing
+# Multiprocessing and variant batches
 
-The most time consuming step of the pipeline is when the ASPs are calculated. Multiple processes calculating ASPs for sets of VCF lines can be launched with the option `--ncores` (1 by default).
+The most time consuming step of the pipeline is when the ASPs are calculated. To save on memory, variants are processed by chunk whose number is determined from an upper limit of variants processed by chunk set by `--chunk-size` (5000 variants by chunk by default). Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The number of chunks is increased to match the number of cores if necessary.
 
 # Limitations
-
-## Performance
-
-**It is unnecessary/counterproductive to allocate too much cores (4 might suffice in most cases) as processes need to access to a shared memory by (bad) design.** There is still room for improvement in execution times as one should expect `varif` to be 2 to 3 times faster at most with parallel processing.
-
-For large VCF files (around 500 000 lines), regardless of the number of samples, RAM requirement can be quite substantial.
 
 ## Multi allelic CDS
 
@@ -222,13 +216,13 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
 
 # Examples
 
-1. Save all possible alleles regardless of their ASPs.
+1. Save all possible alleles regardless of their ASPs, processing in parallel 4 batches of 1000 variants.
     ```bash
     varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
         -outfilename ./out/filtered-variants \
         --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
         --fixed --all-variants --all-regions \
-        --output-vcf
+        --output-vcf --chunk-size 1000 --ncores 4
     ```
 
 2. Save alleles falling in a gene regardless of their ASPs with 10 bases upstream and downstream of the alleles.

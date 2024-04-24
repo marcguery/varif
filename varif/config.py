@@ -28,14 +28,17 @@ class Config(object):
         help='Name of the main output file (no extension) that will be appended with the group names')
 
         parser.add_argument('--ncores', dest='ncores', type=int, default=1,
-        metavar="CORES",
+        metavar="INT",
         help='Number of parallel jobs to run')
+        parser.add_argument('--chunk-size', dest='chunksize', type=int, default=5000,
+        metavar="INT",
+        help='Maximal number of variants to be processed in each chunk')
 
         parser.add_argument('--ped', type=str, default=None,
         metavar="FILE",
         help='PED file')
         parser.add_argument('--comparison', dest='comparison', type=str, default="all",
-        metavar="GROUP", help='Compare variants between "families", "lineages", "selfself" or "all"')
+        metavar="STR", help='Compare variants between "families", "lineages", "selfself" or "all"')
 
         parser.add_argument('--fixed', dest='fixed', action='store_true',
         help='Add population-fixed variants in the result')
@@ -67,23 +70,23 @@ class Config(object):
         help='Number of amino acids to include after the allele')
 
         parser.add_argument('--depth', dest='mindepth', type=int, default=5,
-        metavar="DEPTH",
+        metavar="INT",
         help='Minimal read depth for a sample variant to be considered')
         parser.add_argument('--ratio-alt', dest='minaltasp', type=float, default=0.8,
-        metavar="ASP",
+        metavar="FLOAT",
         help='Minimal sample proportion of allele/total read depth to ignore other alleles')
         parser.add_argument('--ratio-ref', dest='maxrefasp', type=float, default=0.2,
-        metavar="ASP",
+        metavar="FLOAT",
         help='Maximal sample proportion of allele/total read depth to ignore it')
 
         parser.add_argument('--max-missing', dest='maxMissing', type=float, default=1,
-        metavar="PROP",
+        metavar="FLOAT",
         help='Maximal proportion of missing or mixed ASP in each group')
         parser.add_argument('--max-similarity', dest='maxSimilarity', type=float, default=1,
-        metavar="PROP",
+        metavar="FLOAT",
         help='Maximal ratio of min(mutated samples prop)/max(mutated samples prop) between groups (non fixed mutations)')
         parser.add_argument('--min-mutated', dest='minMutations', type=float, default=0,
-        metavar="PROP",
+        metavar="FLOAT",
         help='Minimal proportion of mutated samples in the most mutated group (non fixed mutations)')
 
         parser.add_argument('--output-vcf', dest='outputVcf', action='store_true',

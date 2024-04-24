@@ -1,6 +1,4 @@
 from sys import stderr
-import multiprocessing as mp
-import time
 from .variant import Variant
 
 
@@ -41,11 +39,13 @@ class Variants(object):
             for index, group in enumerate(groups):
                 groupmissing = set(group) - set(self.vcf.samples)
                 if len(groupmissing) == len(group):
-                    errors.append("No sample (%s) from one comparison group are present in the VCF file" % (
-                        ", ".join(g for g in group)))
+                    errors.append("No sample from one comparison group (%s) are present in the VCF file '%s'." % (
+                        ", ".join(g for g in group), self.vcf.vcfpath))
+                    errors.append("Check your PED file or your VCF header.")
                 elif len(groupmissing) > 0:
-                    warnings.append("Some samples (%s) from one comparison group are absent in the VCF file" % (
-                        ", ".join(g for g in groupmissing)))
+                    warnings.append("Some samples from one comparison group (%s) are absent in the VCF file '%s'." % (
+                        ", ".join(g for g in groupmissing), self.vcf.vcfpath))
+                    warnings.append("Check your PED file or your VCF header.")
                     groups[index] = list(set(groups[index])-set(groupmissing))
 
         if len(warnings) > 0:
@@ -86,7 +86,7 @@ class Variants(object):
             "vcfline": vcfline,
             "log": variant.log}
 
-    def process_variants(self, group1=[], group2=[], procs = 1):
+    def process_variants(self, group1 = [], group2 = []):
         """
         Store variant found at each line of VCF
 
@@ -98,23 +98,8 @@ class Variants(object):
         self.group1 = group1 if len(group1) > 0 else self.vcf.samples
         self.group2 = group2 if len(group2) > 0 else self.vcf.samples
         self.group1, self.group2 = self.check_samples()
-        n = self.vcf.headerlinenumber + 1
-
-        start = time.time()
-        if procs == 1:
-            while n <= len(self.vcf.vcffile):
-                self.process_vcf_variant(n)
-                n += 1
-            print("Variants analysed in %s seconds"%(round(time.time()-start)))
         
-        else:
-            vcflines=range(n, len(self.vcf.vcffile)+1)
-            with mp.Manager() as manager:
-                self.variants = manager.dict()
-                with manager.Pool(processes = procs) as pool:
-                    pool.map(self.process_vcf_variant, vcflines)
-                print("Variants analysed in %s seconds"%(round(time.time()-start)))
-
-                start = time.time()
-                self.variants = dict(self.variants)
-                print("Variants stored in %s seconds"%(round(time.time()-start)))
+        n = 1
+        while n <= len(self.vcf.vcffile):
+            self.process_vcf_variant(n)
+            n += 1

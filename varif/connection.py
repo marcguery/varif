@@ -1,12 +1,14 @@
 from sys import stderr
 from .config import Config
-from .vcf import Vcf
+from .vcf import Vcf, Vcfdata
 from .variants import Variants
 from .families import Families
 from .annotations import Annotations
 from .fasta import Fasta
 from .version import __version__
 import time
+import math
+from multiprocessing import Pool
 
 
 class Connection(object):
@@ -21,14 +23,23 @@ class Connection(object):
         families (Families) : PED data
         annotations (Annotations) : GFF data and tools
         fasta (Fasta) : Fasta object
+        samples (list) : Sorted list of samples processed
+        group1 (list) : Samples belonging to the 'group1' to be compared
+        group2 (list) : Samples belonging to the 'group2' to be compared
+        chunks (int) : Number of chunks to use to process the variants separately
+        comparison (str) : Type of comparison to use between groups
+        fixed (bool) : Whether to include fixed variants in the output
+        allVariants (bool) : Whether to include all variants in the output
+        allRegions (bool) : Whether to include all genomic regions in the output
+        outFile (str) : Name of the output file name
+        outputVcf (bool) : Whether to also output the filtered VCF file
 
         """
 
         start_time = time.time()
         Config.set_options()
         self.check_arguments(Config.options)
-        self.vcf = Vcf()
-        self.vcf.read_vcf(Config.options["vcf"])
+        self.vcf=None
         self.families = Families()
         if Config.options["ped"] is not None:
             self.families.read_ped(Config.options["ped"])
@@ -36,11 +47,40 @@ class Connection(object):
         self.annotations.load_annotations_from_GFF(Config.options['gff'])
         self.fasta=Fasta()
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
-        print("Data loaded in %s seconds"%(round(time.time() - start_time)))
-        self.get_all_groups(
-            comparison=Config.options["comparison"],fixed=Config.options["fixed"], 
-            allVariants=Config.options["allVariants"],allRegions=Config.options["allRegions"],
-            outFile=Config.options["outFile"], outputVcf=Config.options["outputVcf"])
+        print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
+
+        self.samples = []
+        self.group1 = []
+        self.group2 = []
+        self.chunks = 1
+        self.comparison = Config.options["comparison"]
+        self.fixed = Config.options["fixed"]
+        self.allVariants = Config.options["allVariants"]
+        self.allRegions = Config.options["allRegions"]
+        self.outFile = Config.options["outFile"]
+        self.outputVcf = Config.options["outputVcf"]
+        self.get_all_groups()
+    
+
+        
+    def print_log(self, allvariants, variantId):
+        """
+        Print the log stored in a variant if not empty
+
+        allvariants (Variants) : Current variants processed
+        variantId (str) : The unique identifier of the variant
+
+        """
+        log = ""
+        mainlog = allvariants.variants[variantId]["log"][0]
+        varlogs=allvariants.variants[variantId]["log"][1]
+
+        if mainlog != "":
+            log = "Variant %s: %s"%(variantId, mainlog)
+        if "".join(varlogs) != "": 
+            pass
+        if log != "":
+            print(log, file = stderr)
     
     def check_arguments(self, arguments):
         """
@@ -61,6 +101,10 @@ class Connection(object):
                 raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
             if arguments["ped"] is None and arguments["comparison"] != "all":
                 raise NameError("Argument 'ped' is required when comparing groups ('%s' comparison)"%(arguments["comparison"]))
+        if arguments["ncores"] < 1:
+            raise ValueError("Number of cores must be at least 1, not %s"%(arguments["ncores"]))
+        if arguments["chunksize"] < 500:
+            raise ValueError("Chunk size must be at least 500, not %s"%(arguments["chunksize"]))
         for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
             if arguments[arg] < 0:
                 raise ValueError("DNA window '%s' must be above 0, not %s"%(arg, arguments[arg])) 
@@ -84,7 +128,7 @@ class Connection(object):
         reference (str) : Upper case sequence before mutation
         mutation (str) : Upper case sequence after mutation
         gffId (str) : ID of the CDS as in GFF3 file
-        keepMutation (bool) : Whether to remove bases of the mutated sequence located in introns
+        stripMutation (bool) : Whether to remove bases of the mutated sequence located in introns
 
         return (list) : CDS and aminoacids (with their positions) before and after mutation
 
@@ -137,7 +181,7 @@ class Connection(object):
     
     def load_features(self, allvariants, variantId):
         """
-        Store amino acids obtained from CDS translations
+        Store aminoacids obtained from CDS translations
         
         allvariants (Variants) : Current variants processed
         variantId (str) : Unique identifier of the variant
@@ -176,9 +220,27 @@ class Connection(object):
             subcategories = sorted(set([self.annotations.annotations[gffId]['annotation'] for gffId in allvariants.variants[variantId]["features"]]))
             allvariants.variants[variantId]["categories"].append(",".join([maincategory]+[subcategories for subcategories in subcategories]))
 
-    def print_line(self, allvariants, variantId=None, altIndex=0, sep=";"):
+    def print_header(self, csvsep = ";"):
         """
-        Create a line for the main output of varif separating each alt's variant
+        Print the header of the output file(s)
+
+        csvsep (str) : Separator to use for the CSV file
+
+        return (list) : The headers of each of the CSV and filtered VCF files
+
+        """
+        baseHeader=[
+                "Chromosome", "Position", "Type",
+                "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
+                "Annotation","Proportions"]
+        csvline = csvsep.join(baseHeader+self.samples)+"\n"
+
+        vcfline = "".join(self.vcf.vcffile[0:self.vcf.headerlinenumber])
+        return [csvline, vcfline]
+    
+    def annotate_variant(self, allvariants, variantId=None, altIndex=0, sep=";"):
+        """
+        Annotate a single VCF variant for the main output of varif separating each alt's variant
 
         allvariants (Variants) : Current variants processed
         variantId (str) : The unique identifier of the variant
@@ -188,90 +250,60 @@ class Connection(object):
         return (str) : The line of the header or of each alt
 
         """
-        if variantId is None:
-            baseHeader=[
-                "Chromosome", "Position", "Type",
-                "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
-                "Annotation","Proportions"]
-            line=sep.join(baseHeader+allvariants.samples)+"\n"
-        else:
-            windowLenSum=len(allvariants.variants[variantId]["refwindow"][0])+len(allvariants.variants[variantId]["refwindow"][1])
-            leftwindow=allvariants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
-            rightwindow="|"+allvariants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
-            content=[
-                allvariants.variants[variantId]["chromosome"], str(allvariants.variants[variantId]["position"]), 
-                allvariants.variants[variantId]["categories"][altIndex],
-                leftwindow+allvariants.variants[variantId]["ref"]+rightwindow, 
-                allvariants.variants[variantId]["alts"][altIndex],
-                "NA", "NA", "NA","NA", "NA",
-                ":".join(f'{props:03}' for props in allvariants.variants[variantId]["props"][altIndex])]
-            content+=["NA"]*len(allvariants.samples)
+        assert variantId is not None
 
-            aaposref=[]
-            cdsref=[]
-            aaref=[]
-            aaposalts=[]
-            cdsalts=[]
-            aaalts=[]
-            for gffId in allvariants.variants[variantId]["cdsRef"]:
-                aaposref.append("/".join(str(pos) for pos in allvariants.variants[variantId]["aaPosRef"][gffId]))
-                cdsref.append(allvariants.variants[variantId]["cdsRef"][gffId]+" ("+gffId+")")
-                aaref.append(allvariants.variants[variantId]["aaRef"][gffId])
-                aaposalts.append("/".join(str(pos) for pos in allvariants.variants[variantId]["aaPosAlts"][gffId][altIndex]))
-                cdsalts.append(allvariants.variants[variantId]["cdsAlts"][gffId][altIndex])
-                aaalts.append(allvariants.variants[variantId]["aaAlts"][gffId][altIndex])
+        windowLenSum=len(allvariants.variants[variantId]["refwindow"][0])+len(allvariants.variants[variantId]["refwindow"][1])
+        leftwindow=allvariants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
+        rightwindow="|"+allvariants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
+        content=[
+            allvariants.variants[variantId]["chromosome"], str(allvariants.variants[variantId]["position"]), 
+            allvariants.variants[variantId]["categories"][altIndex],
+            leftwindow+allvariants.variants[variantId]["ref"]+rightwindow, 
+            allvariants.variants[variantId]["alts"][altIndex],
+            "NA", "NA", "NA","NA", "NA",
+            ":".join(f'{props:03}' for props in allvariants.variants[variantId]["props"][altIndex])]
+        content+=["NA"]*len(allvariants.samples)
+
+        aaposref=[]
+        cdsref=[]
+        aaref=[]
+        aaposalts=[]
+        cdsalts=[]
+        aaalts=[]
+        for gffId in allvariants.variants[variantId]["cdsRef"]:
+            aaposref.append("/".join(str(pos) for pos in allvariants.variants[variantId]["aaPosRef"][gffId]))
+            cdsref.append(allvariants.variants[variantId]["cdsRef"][gffId]+" ("+gffId+")")
+            aaref.append(allvariants.variants[variantId]["aaRef"][gffId])
+            aaposalts.append("/".join(str(pos) for pos in allvariants.variants[variantId]["aaPosAlts"][gffId][altIndex]))
+            cdsalts.append(allvariants.variants[variantId]["cdsAlts"][gffId][altIndex])
+            aaalts.append(allvariants.variants[variantId]["aaAlts"][gffId][altIndex])
             
-            if len(allvariants.variants[variantId]["cdsRef"]) > 0: #There is a feature at least
-                content[5]=":".join(cdsref) #the same cds ref in different features
-                content[6]=":".join(cdsalts) #different cds alt
-                content[7]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaref, aaposref))+")" #the same aa ref in different features
-                content[8]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
-            annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
-            content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
-            for i, sample in enumerate(allvariants.samples):#asps
-                content[11+i]='{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
-            line=sep.join(content)+"\n"
+        if len(allvariants.variants[variantId]["cdsRef"]) > 0: #There is a feature at least
+            content[5]=":".join(cdsref) #the same cds ref in different features
+            content[6]=":".join(cdsalts) #different cds alt
+            content[7]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaref, aaposref))+")" #the same aa ref in different features
+            content[8]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
+        annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
+        content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
+        for i, sample in enumerate(allvariants.samples):#asps
+            content[11+i]='{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
+        line=sep.join(content)+"\n"
         return line
-        
-    def print_log(self, allvariants, variantId):
-        """
-        Print the log stored in a variant if not empty
 
-        allvariants (Variants) : Current variants processed
-        variantId (str) : The unique identifier of the variant
-
-        """
-        log = ""
-        mainlog = allvariants.variants[variantId]["log"][0]
-        varlogs=allvariants.variants[variantId]["log"][1]
-
-        if mainlog != "":
-            log = "Variant %s: %s"%(variantId, mainlog)
-        if "".join(varlogs) != "": 
-            pass
-        if log != "":
-            print(log, file = stderr)
-
-    def get_all_variants(self, allvariants, fixed, allVariants, allRegions, csv, filteredvcf):
+    def annotate_variants(self, allvariants):
         """
         Retrieve and merge information about the variants filtered
 
         allvariants (Variants) : Current variants processed
-        fixed (bool) : Show also fixed variants if True
-        allVariants (bool) : Show all variants if True (even fixed)
-        allRegions (bool) : Show not only CDS if True
-        csv (str) : File path of the CSV (semicolon separated)
-        filteredvcf (str) : File path of the filtered VCF
+
+        return (list) : A list of lines in CSV format and the corresponding VCF content
 
         """
-
-        start_time = time.time()
-        fixed=True if allVariants is True else fixed
+        self.fixed=True if self.allVariants is True else self.fixed
         sortedKeys=sorted(allvariants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
-        #Headers
-        printedLine=self.print_line(allvariants)
-        filteredvcfcontent="".join(allvariants.vcf.vcffile[0:allvariants.vcf.headerlinenumber])
-        vcfcorrespondingline=allvariants.vcf.headerlinenumber-1
+        vcfcorrespondingline = 0
+        printedLine=""
+        filteredvcfcontent=""
         #Body
         for key in sortedKeys:
             endPosition = allvariants.variants[key]["position"] + len(allvariants.variants[key]["ref"]) - 1
@@ -281,7 +313,7 @@ class Connection(object):
 
             allvariants.variants[key]["features"] = gffIds
             self.define_categories(allvariants, key)
-            if len(allvariants.variants[key]["features"]) == 0 and allRegions is False:
+            if len(allvariants.variants[key]["features"]) == 0 and self.allRegions is False:
                 continue #No feature-surrounded variants
             allvariants.variants[key]["refwindow"] = self.fasta.window_sequence(allvariants.variants[key]["chromosome"],
             allvariants.variants[key]["position"], allvariants.variants[key]["ref"],
@@ -290,46 +322,80 @@ class Connection(object):
             self.load_features(allvariants, key)
             #Each alt has its line
             for altIndex, alt in enumerate(allvariants.variants[key]["alts"]):
-                if allvariants.variants[key]["types"][altIndex] == "ambiguous" and allVariants is False:
+                if allvariants.variants[key]["types"][altIndex] == "ambiguous" and self.allVariants is False:
                     continue #The VAF or RAF are unknown (low depth) or in between the minimum and maximum set
-                elif allvariants.variants[key]["types"][altIndex] == "fixed" and fixed is False:
+                elif allvariants.variants[key]["types"][altIndex] == "fixed" and self.fixed is False:
                     continue #This variant is fixed (all are ref or all are alt)
-                printedLine+=self.print_line(allvariants, key, altIndex)
+                printedLine+=self.annotate_variant(allvariants, key, altIndex)
                 self.print_log(allvariants, key)
                 if allvariants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
                     vcfcorrespondingline=allvariants.variants[key]["vcfline"]
                     filteredvcfcontent+=allvariants.vcf.vcffile[vcfcorrespondingline-1]
+        return [printedLine, filteredvcfcontent]
+    
+    def get_variants_by_chunk(self, chunknumber):
+        """
+        Process variants for a particular chunk of the total set of variants
+
+        chunknumber (int) : The rank of the chunk to be processed
+
+        return (list) : The ordered sample names of the variants processed and their annotation
+
+        """
+        start_time = time.time()
+        self.vcf = Vcfdata(chunknumber)
+        self.vcf.read_vcf()
+        print("Variants read in %s seconds"%(round(time.time()- start_time)))
+
+        start_time = time.time()
+        allvariants=Variants(self.vcf)
+        allvariants.process_variants(self.group1, self.group2)
+        print("Variants analysed in %s seconds"%(round(time.time()- start_time)))
+
+        start_time = time.time()
+        variantAnnot = self.annotate_variants(allvariants)
+        print("Variant annotations added in %s seconds"%(round(time.time() - start_time)))
+
+        return [allvariants.samples, variantAnnot]
+
+
+    def get_variants(self, outFileName):
+        """
+        Load, process and save all variants in a custom output file
+
+        outFileName (str) : The name of the output file to save variants to
+
+        """
+
+        self.vcf = Vcf()
+        self.vcf.read_vcf_header(Config.options["vcf"])
+        self.vcf.count_lines()
+        self.chunks = max(math.ceil(self.vcf.totlines/Config.options["chunksize"]), Config.options["ncores"])
+        print("Will use %s chunks each with %s variants for a total of %s processed variants."%(self.chunks, Config.options["chunksize"], self.vcf.totlines-self.vcf.headerlinenumber))
+        self.vcf.define_intervals(self.chunks)
+        pool = Pool(Config.options["ncores"])
+        results = pool.map(self.get_variants_by_chunk, range(1,self.chunks+1))
+        self.samples = results[0][0]
+        csvout, vcfout = self.print_header()
+        csvout += "".join(res[1][0] for res in results)
+        vcfout += "".join(res[1][1] for res in results)
         
-        print("Annotations found in %s seconds"%(round(time.time() - start_time)))
+        csv = outFileName+".csv"
+        filteredvcf = outFileName+".vcf" if self.outputVcf else None
         with open(csv, 'w') as f:
-            f.write(printedLine)
-        if filteredvcf is not None:
+            f.write(csvout)
+        if self.outputVcf:
             with open(filteredvcf, 'w') as f:
-                f.write(filteredvcfcontent)
+                f.write(vcfout)
         
-    def get_all_groups(self, comparison, fixed, allVariants, allRegions, outFile, outputVcf):
-        """
-        Get the processed variants for each combination of groups to be compared and output them
-
-        comparison (str) : Group samples by family ('families'), lineage ('lineages'), both ('both') or all against all ('all')
-        fixed (bool) : Show also fixed variants if True
-        allVariants (bool) : Show all variants if True (even fixed)
-        allRegions (bool) : Show not only CDS if True
-        outFile (str) : Name (without extension) of the output file that will be appended with the group information
-        outputVcf (bool) : Whether to ouput the corresponding VCF for each combination of groups compared
-
-        """
-        compare_families = True if comparison == "families" else False
-        compare_lineages = True if comparison == "lineages" else False
-        compare_selfself = True if comparison == "selfself" else False
+    def get_all_groups(self):
+        """Define the groups to use to compare variants with each other"""
+        compare_families = True if self.comparison == "families" else False
+        compare_lineages = True if self.comparison == "lineages" else False
+        compare_selfself = True if self.comparison == "selfself" else False
 
         if not compare_families and not compare_lineages and not compare_selfself:
-            allvariants=Variants(self.vcf)
-            allvariants.process_variants(procs = Config.options["ncores"])
-            csv = outFile+".csv"
-            filteredvcf = outFile+".vcf" if outputVcf else None
-            
-            self.get_all_variants(allvariants, fixed, allVariants, allRegions, csv, filteredvcf)
+            self.get_variants(self.outFile)
         
         if compare_families:
             families = list(self.families.families.keys())
@@ -340,19 +406,13 @@ class Connection(object):
 
             for family_id in range(0,len(families)-1):
                 family1 = families[family_id]
-                group1 = self.families.families[family1]
+                self.group1 = self.families.families[family1]
                 for other_family_id in range(family_id+1, len(families)):
                     family2 = families[other_family_id]
-                    group2 = self.families.families[family2]
-
+                    self.group2 = self.families.families[family2]
                     print("Group comparison of families %s (id : %i) and %s (id: %i)"%(family1, family_id, family2, other_family_id))
-                    allvariants=Variants(self.vcf)
-                    allvariants.process_variants(group1, group2, procs = Config.options["ncores"])
-                    outFileInfo = outFile + "-"+family1+"_with_"+family2 if not long_names else outFile + "-"+str(family_id)+"_with_"+str(other_family_id)
-                    csv = outFileInfo+".csv"
-                    filteredvcf = outFileInfo+".vcf" if outputVcf else None
-
-                    self.get_all_variants(allvariants, fixed, allVariants, allRegions, csv, filteredvcf)
+                    outFileInfo = self.outFile + "-"+family1+"_with_"+family2 if not long_names else self.outFile + "-"+str(family_id)+"_with_"+str(other_family_id)
+                    self.get_variants(outFileInfo)
         
         if compare_lineages:
             parents = list(self.families.parents.keys())
@@ -370,17 +430,12 @@ class Connection(object):
                 mate1 = matesnames[0]
                 mate2 = matesnames[1] if len(matesnames) == 2 else ""
 
-                group1 = matesnames
-                group2 = self.families.parents[mates]
+                self.group1 = matesnames
+                self.group2 = self.families.parents[mates]
 
                 print("Group comparison of parent%s %s%s%s (id : %i) with their offspring"%(plural[0], mate1, plural[1], mate2, index))
-                allvariants=Variants(self.vcf)
-                allvariants.process_variants(group1, group2, procs = Config.options["ncores"])
-                outFileInfo = outFile + "-"+mate1+addingmates+mate2+"_with_offspring" if not long_names else outFile + "-"+str(index)+"_with_offspring"
-                csv = outFileInfo+".csv"
-                filteredvcf = outFileInfo+".vcf" if outputVcf else None
-
-                self.get_all_variants(allvariants, fixed, allVariants, allRegions, csv, filteredvcf)
+                outFileInfo = self.outFile + "-"+mate1+addingmates+mate2+"_with_offspring" if not long_names else self.outFile + "-"+str(index)+"_with_offspring"
+                self.get_variants(outFileInfo)
         
         if compare_selfself:
             families = list(self.families.families.keys())
@@ -391,12 +446,9 @@ class Connection(object):
 
             for family_id in range(0,len(families)):
                 family = families[family_id]
-                group = self.families.families[family]
+                self.group1 = self.families.families[family]
+                self.group2 = self.group1
                 print("Self-self comparison of family %s (id : %i)"%(family, family_id))
-                allvariants=Variants(self.vcf)
-                allvariants.process_variants(group, group, procs = Config.options["ncores"])
-                outFileInfo = outFile + "-"+family if not long_names else outFile + "-"+str(family_id)
-                csv = outFileInfo+".csv"
-                filteredvcf = outFileInfo+".vcf" if outputVcf else None
-                
-                self.get_all_variants(allvariants, fixed, allVariants, allRegions, csv, filteredvcf)
+                outFileInfo = self.outFile + "-"+family if not long_names else self.outFile + "-"+str(family_id)
+                self.get_variants(outFileInfo)
+        

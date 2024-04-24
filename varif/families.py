@@ -1,4 +1,3 @@
-
 class Families(object):
     """Store data loaded from a PED file enabling the possibility of grouping by family or lineage"""
 
