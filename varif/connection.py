@@ -39,13 +39,13 @@ class Connection(object):
         start_time = time.time()
         Config.set_options()
         self.check_arguments(Config.options)
-        self.vcf=None
+        self.vcf = None
         self.families = Families()
         if Config.options["ped"] is not None:
             self.families.read_ped(Config.options["ped"])
-        self.annotations=Annotations()
+        self.annotations = Annotations()
         self.annotations.load_annotations_from_GFF(Config.options['gff'])
-        self.fasta=Fasta()
+        self.fasta = Fasta()
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
         print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
 
@@ -73,7 +73,7 @@ class Connection(object):
         """
         log = ""
         mainlog = allvariants.variants[variantId]["log"][0]
-        varlogs=allvariants.variants[variantId]["log"][1]
+        varlogs = allvariants.variants[variantId]["log"][1]
 
         if mainlog != "":
             log = "Variant %s: %s"%(variantId, mainlog)
@@ -96,7 +96,7 @@ class Connection(object):
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
         if arguments["comparison"] is not None:
-            allowed_values=["families", "lineages", "selfself", "all"]
+            allowed_values = ["families", "lineages", "selfself", "all"]
             if arguments["comparison"] not in allowed_values:
                 raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
             if arguments["ped"] is None and arguments["comparison"] != "all":
@@ -114,10 +114,14 @@ class Connection(object):
         for arg in ["minaltasp", "maxrefasp", "maxMissing", "maxSimilarity", "minMutations"]:
             if not 0 <= arguments[arg] <= 1:
                 raise ValueError("Filtering option '%s' must be a proportion, was %s"%(arg, arguments[arg]))
-        assert arguments["maxrefasp"] <= arguments["minaltasp"], "Reference ASP (was %s) should be <= to Alternate ASP (was %s)"%(arguments["maxrefasp"], arguments["minaltasp"])
+        assert arguments["maxrefasp"] <= arguments["minaltasp"], ("Reference ASP (was %s) should be <= to"
+                                                                  " Alternate ASP (was %s)")%(arguments["maxrefasp"], 
+                                                                                              arguments["minaltasp"])
         if len(arguments["outFile"].split("/")[-1]) > 100:
             raise ValueError("Name of the outfile must not exceed 100 characters")
-        print("Running Varif %s with options \n%s"%(__version__, "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
+        print(("Running Varif %s"
+              " with options \n%s")%(__version__, 
+                                                    "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId, stripMutation = False):
         """
@@ -133,10 +137,10 @@ class Connection(object):
         return (list) : CDS and aminoacids (with their positions) before and after mutation
 
         """
-        assert self.annotations.annotations[gffId]['annotation']=='CDS'
-        strand=self.annotations.annotations[gffId]['strand']
-        windowBefore=2+Config.options["protWindowBefore"]*3
-        windowAfter=2+Config.options["protWindowAfter"]*3
+        assert self.annotations.annotations[gffId]['annotation'] == 'CDS'
+        strand = self.annotations.annotations[gffId]['strand']
+        windowBefore = 2+Config.options["protWindowBefore"]*3
+        windowAfter = 2+Config.options["protWindowAfter"]*3
 
         if len(self.annotations.annotations[gffId]["parents"]) > 1:
             print("Ambiguous origin of CDS %s: one of %s. Taking the first one (%s) by default"%(gffId, ", ".join(self.annotations.annotations[gffId]["parents"]), self.annotations.annotations[gffId]["parents"][0]), file = stderr)
@@ -163,19 +167,19 @@ class Connection(object):
         #Relative position of the reference sequence to the start position of the gene
         relativeVariantPosition = self.fasta.get_relative_gene_position(cdsCoords, newReferencePosition)
         startIndex = max(0, relativeVariantPosition)
-        endIndex=min(len(genesequence), startIndex+len(newReference))
+        endIndex = min(len(genesequence), startIndex+len(newReference))
         oldCDS, aaPos, phase = self.fasta.window_CDS(genesequence, strand, startIndex, endIndex, windowBefore, windowAfter)
-        oldProt=self.fasta.translate_CDS(oldCDS, strand, phase)
+        oldProt = self.fasta.translate_CDS(oldCDS, strand, phase)
 
         if newMutation == newReference:
             #If both original and mutated sequences (without intron bases) are identical,
             # no need to translate twice the same sequence
-            aaChanges=[[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [0,0], "", ""]    
+            aaChanges = [[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [0,0], "", ""]    
         else:
             genesequencemut, startIndexMut, endIndexMut = self.fasta.insert_mutation(chromosome, genesequence, strand, cdsCoords[0][0], cdsCoords[-1][1], relativeVariantPosition, newReference, newMutation)
             newCDS, newaaPos, newphase = self.fasta.window_CDS(genesequencemut, strand, startIndexMut, endIndexMut, windowBefore, windowAfter)
-            newProt=self.fasta.translate_CDS(newCDS, strand, newphase)
-            aaChanges=[[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [newaaPos,int(len(genesequencemut)/3)], newCDS, newProt]   
+            newProt = self.fasta.translate_CDS(newCDS, strand, newphase)
+            aaChanges = [[aaPos,int(len(genesequence)/3)], oldCDS, oldProt, [newaaPos,int(len(genesequencemut)/3)], newCDS, newProt]   
         
         return aaChanges
     
@@ -188,21 +192,21 @@ class Connection(object):
 
         """
         for gffId in allvariants.variants[variantId]["features"]:
-            if self.annotations.annotations[gffId]['annotation']!='CDS':
+            if self.annotations.annotations[gffId]['annotation'] != 'CDS':
                 continue #Not a CDS feature
-            allvariants.variants[variantId]["aaPosAlts"][gffId]=[]
-            allvariants.variants[variantId]["aaAlts"][gffId]=[]
-            allvariants.variants[variantId]["cdsAlts"][gffId]=[]
+            allvariants.variants[variantId]["aaPosAlts"][gffId] = []
+            allvariants.variants[variantId]["aaAlts"][gffId] = []
+            allvariants.variants[variantId]["cdsAlts"][gffId] = []
             for alt in allvariants.variants[variantId]["alts"]:
-                aaDiff=self.get_aa_from_mutation(allvariants.variants[variantId]["chromosome"], 
+                aaDiff = self.get_aa_from_mutation(allvariants.variants[variantId]["chromosome"], 
                 allvariants.variants[variantId]["position"], 
                 allvariants.variants[variantId]["ref"], alt, gffId)
                 allvariants.variants[variantId]["aaPosAlts"][gffId].append(aaDiff[3])
                 allvariants.variants[variantId]["cdsAlts"][gffId].append(aaDiff[4])
                 allvariants.variants[variantId]["aaAlts"][gffId].append(aaDiff[5])
-            allvariants.variants[variantId]["aaPosRef"][gffId]=aaDiff[0]
-            allvariants.variants[variantId]["cdsRef"][gffId]=aaDiff[1]
-            allvariants.variants[variantId]["aaRef"][gffId]=aaDiff[2]
+            allvariants.variants[variantId]["aaPosRef"][gffId] = aaDiff[0]
+            allvariants.variants[variantId]["cdsRef"][gffId] = aaDiff[1]
+            allvariants.variants[variantId]["aaRef"][gffId] = aaDiff[2]
     
     def define_categories(self, allvariants, variantId):
         """
@@ -229,7 +233,7 @@ class Connection(object):
         return (list) : The headers of each of the CSV and filtered VCF files
 
         """
-        baseHeader=[
+        baseHeader = [
                 "Chromosome", "Position", "Type",
                 "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
                 "Annotation","Proportions"]
@@ -238,7 +242,7 @@ class Connection(object):
         vcfline = "".join(self.vcf.vcffile[0:self.vcf.headerlinenumber])
         return [csvline, vcfline]
     
-    def annotate_variant(self, allvariants, variantId=None, altIndex=0, sep=";"):
+    def annotate_variant(self, allvariants, variantId = None, altIndex = 0, sep = ";"):
         """
         Annotate a single VCF variant for the main output of varif separating each alt's variant
 
@@ -252,24 +256,24 @@ class Connection(object):
         """
         assert variantId is not None
 
-        windowLenSum=len(allvariants.variants[variantId]["refwindow"][0])+len(allvariants.variants[variantId]["refwindow"][1])
-        leftwindow=allvariants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
-        rightwindow="|"+allvariants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
-        content=[
+        windowLenSum = len(allvariants.variants[variantId]["refwindow"][0])+len(allvariants.variants[variantId]["refwindow"][1])
+        leftwindow = allvariants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
+        rightwindow = "|"+allvariants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
+        content = [
             allvariants.variants[variantId]["chromosome"], str(allvariants.variants[variantId]["position"]), 
             allvariants.variants[variantId]["categories"][altIndex],
             leftwindow+allvariants.variants[variantId]["ref"]+rightwindow, 
             allvariants.variants[variantId]["alts"][altIndex],
             "NA", "NA", "NA","NA", "NA",
             ":".join(f'{props:03}' for props in allvariants.variants[variantId]["props"][altIndex])]
-        content+=["NA"]*len(allvariants.samples)
+        content += ["NA"]*len(allvariants.samples)
 
-        aaposref=[]
-        cdsref=[]
-        aaref=[]
-        aaposalts=[]
-        cdsalts=[]
-        aaalts=[]
+        aaposref = []
+        cdsref = []
+        aaref = []
+        aaposalts = []
+        cdsalts = []
+        aaalts = []
         for gffId in allvariants.variants[variantId]["cdsRef"]:
             aaposref.append("/".join(str(pos) for pos in allvariants.variants[variantId]["aaPosRef"][gffId]))
             cdsref.append(allvariants.variants[variantId]["cdsRef"][gffId]+" ("+gffId+")")
@@ -279,15 +283,15 @@ class Connection(object):
             aaalts.append(allvariants.variants[variantId]["aaAlts"][gffId][altIndex])
             
         if len(allvariants.variants[variantId]["cdsRef"]) > 0: #There is a feature at least
-            content[5]=":".join(cdsref) #the same cds ref in different features
-            content[6]=":".join(cdsalts) #different cds alt
-            content[7]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaref, aaposref))+")" #the same aa ref in different features
-            content[8]="):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
-        annotations=set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
-        content[9]=":".join(annotations) if annotations!=set() else content[9] #potentially different annotations
+            content[5] = ":".join(cdsref) #the same cds ref in different features
+            content[6] = ":".join(cdsalts) #different cds alt
+            content[7] = "):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaref, aaposref))+")" #the same aa ref in different features
+            content[8] = "):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
+        annotations = set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
+        content[9] = ":".join(annotations) if annotations != set() else content[9] #potentially different annotations
         for i, sample in enumerate(allvariants.samples):#asps
-            content[11+i]='{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
-        line=sep.join(content)+"\n"
+            content[11+i] = '{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
+        line = sep.join(content)+"\n"
         return line
 
     def annotate_variants(self, allvariants):
@@ -299,15 +303,15 @@ class Connection(object):
         return (list) : A list of lines in CSV format and the corresponding VCF content
 
         """
-        self.fixed=True if self.allVariants is True else self.fixed
-        sortedKeys=sorted(allvariants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
+        self.fixed = True if self.allVariants is True else self.fixed
+        sortedKeys = sorted(allvariants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         vcfcorrespondingline = 0
-        printedLine=""
-        filteredvcfcontent=""
+        printedLine = ""
+        filteredvcfcontent = ""
         #Body
         for key in sortedKeys:
             endPosition = allvariants.variants[key]["position"] + len(allvariants.variants[key]["ref"]) - 1
-            gffIds=self.annotations.map_GFFid_VCFpos(allvariants.variants[key]["chromosome"], 
+            gffIds = self.annotations.map_GFFid_VCFpos(allvariants.variants[key]["chromosome"], 
             allvariants.variants[key]["position"], 
             endPosition)
 
@@ -326,11 +330,11 @@ class Connection(object):
                     continue #The VAF or RAF are unknown (low depth) or in between the minimum and maximum set
                 elif allvariants.variants[key]["types"][altIndex] == "fixed" and self.fixed is False:
                     continue #This variant is fixed (all are ref or all are alt)
-                printedLine+=self.annotate_variant(allvariants, key, altIndex)
+                printedLine += self.annotate_variant(allvariants, key, altIndex)
                 self.print_log(allvariants, key)
                 if allvariants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
-                    vcfcorrespondingline=allvariants.variants[key]["vcfline"]
-                    filteredvcfcontent+=allvariants.vcf.vcffile[vcfcorrespondingline-1]
+                    vcfcorrespondingline = allvariants.variants[key]["vcfline"]
+                    filteredvcfcontent += allvariants.vcf.vcffile[vcfcorrespondingline-1]
         return [printedLine, filteredvcfcontent]
     
     def get_variants_by_chunk(self, chunknumber):
@@ -348,7 +352,7 @@ class Connection(object):
         print("Variants read in %s seconds"%(round(time.time()- start_time)))
 
         start_time = time.time()
-        allvariants=Variants(self.vcf)
+        allvariants = Variants(self.vcf)
         allvariants.process_variants(self.group1, self.group2)
         print("Variants analysed in %s seconds"%(round(time.time()- start_time)))
 
@@ -370,9 +374,14 @@ class Connection(object):
         self.vcf = Vcf()
         self.vcf.read_vcf_header(Config.options["vcf"])
         self.vcf.count_lines()
-        self.chunks = max(math.ceil(self.vcf.totlines/Config.options["chunksize"]), Config.options["ncores"])
-        print("Will use %s chunks each with %s variants for a total of %s processed variants."%(self.chunks, Config.options["chunksize"], self.vcf.totlines-self.vcf.headerlinenumber))
-        self.vcf.define_intervals(self.chunks)
+        self.chunks = max(math.ceil((self.vcf.totlines-self.vcf.headerlinenumber)/Config.options["chunksize"]), Config.options["ncores"])
+        intervals = self.vcf.define_intervals(self.chunks)
+        log = ("Will use %s chunks "
+                "each with %s variants "
+                "for a total of %s processed variants.")%(self.chunks, 
+                                                          "/".join((str(interval) for interval in intervals)), 
+                                                          self.vcf.totlines-self.vcf.headerlinenumber)
+        print(log)
         pool = Pool(Config.options["ncores"])
         results = pool.map(self.get_variants_by_chunk, range(1,self.chunks+1))
         self.samples = results[0][0]
@@ -424,7 +433,7 @@ class Connection(object):
             for index,mates in enumerate(parents):
                 if mates == "NA":
                     continue
-                matesnames=mates.split()
+                matesnames = mates.split()
                 plural = ["s", " and "] if len(matesnames) == 2 else ["", ""]
                 addingmates = "-and-" if len(matesnames) == 2 else ""
                 mate1 = matesnames[0]

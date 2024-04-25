@@ -9,10 +9,10 @@ class Families(object):
         sample (list) : All samples from the PED file
         
         """
-        self.pedfile=None
-        self.families={}
-        self.parents={}
-        self.samples=[]
+        self.pedfile = None
+        self.families = {}
+        self.parents = {}
+        self.samples = []
     
     def read_ped(self, ped):
         """
@@ -22,19 +22,19 @@ class Families(object):
 
         """
         with open(ped, 'r') as f:
-            self.pedfile=f.readlines()
+            self.pedfile = f.readlines()
         for line in self.pedfile:
-            data=line.split()
-            family=data[0]
-            sample=data[1]
-            father=data[2] if data[2] != "0" else ""
-            mother=data[3] if data[3] != "0" else ""
+            data = line.split()
+            family = data[0]
+            sample = data[1]
+            father = data[2] if data[2] != "0" else ""
+            mother = data[3] if data[3] != "0" else ""
             if father == "" and mother == "":
                 parent = "NA"
             else:
-                parent=min([father, mother])+" "+max([father, mother])
-            sex=data[4]
-            genotype=data[5]
+                parent = min([father, mother])+" "+max([father, mother])
+            #sex = data[4]
+            #genotype = data[5]
             if family in self.families:
                 if sample not in self.families[family]:
                     self.families[family].append(sample)

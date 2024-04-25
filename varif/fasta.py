@@ -9,8 +9,8 @@ class Fasta(object):
         dnareverse (dict) : Map of complementary bases
 
         """
-        self.data={}
-        self.dnatable={ 
+        self.data = {}
+        self.dnatable = { 
         'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M', 
         'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T', 
         'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K', 
@@ -28,7 +28,7 @@ class Fasta(object):
         'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_', 
         'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W', 
         }
-        self.dnareverse={
+        self.dnareverse = {
             'A':'T', 'T':'A', 'C':'G', 'G':'C'
         }
     
@@ -40,19 +40,19 @@ class Fasta(object):
 
         """
         with open(fasta, 'r') as fastaFile:
-            fastaInfo=[line.rstrip("\n") for line in fastaFile]
+            fastaInfo = [line.rstrip("\n") for line in fastaFile]
             #Looking for headers
-            fastaHeaders=[index for index, line in enumerate(fastaInfo) if line[0]==">"]
+            fastaHeaders = [index for index, line in enumerate(fastaInfo) if line[0] == ">"]
             #Iterating over headers only
-            n=1
+            n = 1
             while n < len(fastaHeaders):
-                currentIdx=fastaHeaders[n-1]
-                nextIdx=fastaHeaders[n]
-                chromosome=fastaInfo[currentIdx].split("|")[0].strip("> ")
-                self.data[chromosome]="".join(fastaInfo[currentIdx+1:nextIdx])
-                n+=1
-            chromosome=fastaInfo[nextIdx].split("|")[0].strip("> ")
-            self.data[chromosome]="".join(fastaInfo[nextIdx+1:])
+                currentIdx = fastaHeaders[n-1]
+                nextIdx = fastaHeaders[n]
+                chromosome = fastaInfo[currentIdx].split("|")[0].strip("> ")
+                self.data[chromosome] = "".join(fastaInfo[currentIdx+1:nextIdx])
+                n += 1
+            chromosome = fastaInfo[nextIdx].split("|")[0].strip("> ")
+            self.data[chromosome] = "".join(fastaInfo[nextIdx+1:])
     
     def reverse_strand(self, cds):
         """
@@ -61,11 +61,12 @@ class Fasta(object):
         cds (str) : Upper case of base sequences
 
         return (str) : The reverted sequence
+        
         """
-        cds=cds[::-1]
-        newcds=""
+        cds = cds[::-1]
+        newcds = ""
         for i in range(len(cds)):
-            newcds+=self.dnareverse[cds[i]] if cds[i] in self.dnareverse else '?'
+            newcds += self.dnareverse[cds[i]] if cds[i] in self.dnareverse else '?'
         return newcds
     
     def get_relative_gene_position(self, cdsCoords, position):
@@ -182,7 +183,7 @@ class Fasta(object):
 
         """
         startIndex = max(0, startref)
-        endIndex=min(len(genesequence), startIndex+len(reference))
+        endIndex = min(len(genesequence), startIndex+len(reference))
         #Add bases if the mutation is shorter than the reference
         shift = len(reference) - len(mutation)
         #Hanging reference bases from the reference are not included in the size difference
@@ -216,7 +217,7 @@ class Fasta(object):
         genesequencemut = self.data[chromosome][startgene-upshift-basestoaddforcds:startgene-upshift]+genesequencemut if strand == "-" else genesequencemut+self.data[chromosome][endgene+downshift:endgene+downshift+basestoaddforcds]
 
         startIndexMut = startIndex+upshift+basestoaddforcds if strand == "-" else startIndex+upshift
-        endIndexMut=min(len(genesequencemut), startIndexMut+len(mutation[upmutshift:len(mutation)-downmutshift]))
+        endIndexMut = min(len(genesequencemut), startIndexMut+len(mutation[upmutshift:len(mutation)-downmutshift]))
         return [genesequencemut, startIndexMut, endIndexMut]
     
     def merge_CDS(self, chromosome, cdsCoords):
@@ -232,7 +233,7 @@ class Fasta(object):
         
         genesequence = ""
         for coord in cdsCoords:
-            genesequence+=self.data[chromosome][coord[0]:coord[1]]
+            genesequence += self.data[chromosome][coord[0]:coord[1]]
         assert len(genesequence)%3 == 0
         return genesequence
     
@@ -253,7 +254,7 @@ class Fasta(object):
         posBefore = position - windowBefore
         posAfter = position + windowAfter
         if posBefore < 1 or posAfter + seqLength > len(self.data[chromosome]):
-            print("DNA window too wide at position (%s:%s). Changing to maximal window..."%(chromosome, position), file=stderr)
+            print("DNA window too wide at position (%s:%s). Changing to maximal window..."%(chromosome, position), file = stderr)
             posBefore = 1 if posBefore < 1 else posBefore
             posAfter = -2 - seqLength if posAfter + seqLength > len(self.data[chromosome]) else posAfter
         return [self.data[chromosome][posBefore-1:position-1],self.data[chromosome][position+seqLength-1:posAfter+seqLength-1]]
@@ -276,19 +277,19 @@ class Fasta(object):
         #The number of nucleotides to skip
         # knowing that the window is +/- windows nucleotides after mutation
         #Translation starts at start of feature
-        if strand=="+":
-            shiftBefore=min(startIndex, windowBefore)
-            shiftAfter=min(len(genesequence)-endIndex, windowAfter)
-            aaPos=int(startIndex/3)+1
-            phase=-(startIndex-shiftBefore)%3
+        if strand == "+":
+            shiftBefore = min(startIndex, windowBefore)
+            shiftAfter = min(len(genesequence)-endIndex, windowAfter)
+            aaPos = int(startIndex/3)+1
+            phase = -(startIndex-shiftBefore)%3
         #Translation starts at end of feature
-        elif strand=="-":
-            shiftBefore=min(startIndex, windowAfter)
-            shiftAfter=min(len(genesequence)-endIndex, windowBefore)
-            aaPos=int((len(genesequence)-endIndex)/3)+1
-            phase=-(len(genesequence)-(endIndex+shiftAfter))%3
+        elif strand == "-":
+            shiftBefore = min(startIndex, windowAfter)
+            shiftAfter = min(len(genesequence)-endIndex, windowBefore)
+            aaPos = int((len(genesequence)-endIndex)/3)+1
+            phase = -(len(genesequence)-(endIndex+shiftAfter))%3
         
-        cds=genesequence[startIndex-shiftBefore:endIndex+shiftAfter]
+        cds = genesequence[startIndex-shiftBefore:endIndex+shiftAfter]
         return [cds, aaPos, phase]
 
     def translate_CDS(self, cds, strand, phase):
@@ -300,14 +301,15 @@ class Fasta(object):
         phase (int) : The number of bases to skip before the first codon
 
         return (str) : The upper case list of aminoacids
+        
         """
-        protein=""
-        aminoacid=""
-        cds=self.reverse_strand(cds) if strand=="-" else cds
-        i=phase
-        n=len(cds)
+        protein = ""
+        aminoacid = ""
+        cds = self.reverse_strand(cds) if strand == "-" else cds
+        i = phase
+        n = len(cds)
         while i <= n-3 and aminoacid != "_":
-            aminoacid=self.dnatable[cds[i:i+3]] if cds[i:i+3] in self.dnatable else '?'
-            protein+=aminoacid
-            i+=3
+            aminoacid = self.dnatable[cds[i:i+3]] if cds[i:i+3] in self.dnatable else '?'
+            protein += aminoacid
+            i += 3
         return protein

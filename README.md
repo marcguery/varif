@@ -62,6 +62,53 @@ The optional PED file containing the family membership and parental relationship
 
 Use `varif` to filter and annotate variants submitted through a VCF file.
 
+```bash
+options:
+  -h, --help                show this help message and exit
+  -vcf FILE                 VCF file
+  -gff FILE                 GFF3 file
+  -fasta FILE               FASTA file
+  -outfilename FILENAME     Name of the main output file (no extension) that
+                            will be appended with the group names
+  --ncores INT              Number of parallel jobs to run
+  --chunk-size INT          Maximal number of variants to be processed in
+                            each chunk
+  --ped FILE                PED file
+  --comparison STR          Compare variants between "families", "lineages",
+                            "selfself" or "all"
+  --fixed                   Add population-fixed variants in the result
+  --no-fixed                Do not add population-fixed mutations in the
+                            result
+  --all-variants            Add all variants in the result (including fixed
+                            mutations)
+  --best-variants           Add only differentially mutated alleles in the
+                            main output (the whole variant for the output
+                            VCF)
+  --all-regions             Add variants from all regions of the genome
+  --gene-regions            Add variants only in gene-annotated regions
+  --nucl-window-before INT  Number of bases to include before the allele
+  --nucl-window-after INT   Number of bases to include after the allele
+  --prot-window-before INT  Number of amino acids to include before the
+                            allele
+  --prot-window-after INT   Number of amino acids to include after the
+                            allele
+  --depth INT               Minimal read depth for a sample variant to be
+                            considered
+  --ratio-alt FLOAT         Minimal sample proportion of allele/total read
+                            depth to ignore other alleles
+  --ratio-ref FLOAT         Maximal sample proportion of allele/total read
+                            depth to ignore it
+  --max-missing FLOAT       Maximal proportion of missing or mixed ASP in
+                            each group
+  --max-similarity FLOAT    Maximal ratio of min(mutated samples
+                            prop)/max(mutated samples prop) between groups
+                            (non fixed mutations)
+  --min-mutated FLOAT       Minimal proportion of mutated samples in the
+                            most mutated group (non fixed mutations)
+  --output-vcf              Whether to output filtered VCF files or not
+  --version                 Show varif version
+```
+
 For each allele in each sample, `varif` will calculate the Allele Sample Proportion (ASP) and classify it as a true mutation or not based on filters applied with the available options. The values of all ASPs are compared to find sites likely to be differentially mutated between group of samples.
 
 Alleles passing the filters will be stored in a CSV file (multiple alleles at the same position are separated) generated with the name (without extension) set by the option `-outfilename`. If the option `--output-vcf` is set, the corresponding filtered variants (multiple alleles at the same position are merged) from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).

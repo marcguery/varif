@@ -49,7 +49,7 @@ class Variants(object):
                     groups[index] = list(set(groups[index])-set(groupmissing))
 
         if len(warnings) > 0:
-            print("\n".join(warning for warning in warnings), file=stderr)
+            print("\n".join(warning for warning in warnings), file = stderr)
         if len(errors) > 0:
             raise NameError("\n".join(error for error in errors))
         return (groups)
@@ -92,7 +92,6 @@ class Variants(object):
 
         group1 (list) : Sample names in the first group to be compared 
         group2 (list) : Sample names in the second group to be compared
-        procs (int) : Number of Python Processes to launch in parallel
 
         """
         self.group1 = group1 if len(group1) > 0 else self.vcf.samples
