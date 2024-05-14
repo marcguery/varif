@@ -47,7 +47,8 @@ class Connection(object):
         self.annotations.load_annotations_from_GFF(Config.options['gff'])
         self.fasta = Fasta()
         self.fasta.load_data_from_FASTA(Config.options['fasta'])
-        print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
+        if Config.options["verbose"]:
+            print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
 
         self.samples = []
         self.group1 = []
@@ -103,6 +104,12 @@ class Connection(object):
                 raise NameError("Argument 'ped' is required when comparing groups ('%s' comparison)"%(arguments["comparison"]))
         if arguments["ncores"] < 1:
             raise ValueError("Number of cores must be at least 1, not %s"%(arguments["ncores"]))
+        if arguments["nchunks"] < arguments["ncores"]:
+            if arguments["nchunks"] < 1:
+                raise ValueError("Number of chunks to run in a single batch must be at least 1, not %s"%(arguments["nchunks"]))
+            else:
+                print("Reassigning number of chunks to run in a single batch to the number of cores: %s"%(arguments["ncores"]))
+                arguments["nchunks"] = arguments["ncores"]
         if arguments["chunksize"] < 500:
             raise ValueError("Chunk size must be at least 500, not %s"%(arguments["chunksize"]))
         for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
@@ -349,16 +356,19 @@ class Connection(object):
         start_time = time.time()
         self.vcf = Vcfdata(chunknumber)
         self.vcf.read_vcf()
-        print("Variants read in %s seconds"%(round(time.time()- start_time)))
+        if Config.options["verbose"]:
+            print("Variants read in %s seconds"%(round(time.time()- start_time)))
 
         start_time = time.time()
         allvariants = Variants(self.vcf)
         allvariants.process_variants(self.group1, self.group2)
-        print("Variants analysed in %s seconds"%(round(time.time()- start_time)))
+        if Config.options["verbose"]:
+            print("Variants analysed in %s seconds"%(round(time.time()- start_time)))
 
         start_time = time.time()
         variantAnnot = self.annotate_variants(allvariants)
-        print("Variant annotations added in %s seconds"%(round(time.time() - start_time)))
+        if Config.options["verbose"]:
+            print("Variant annotations added in %s seconds"%(round(time.time() - start_time)))
 
         return [allvariants.samples, variantAnnot]
 
@@ -370,32 +380,56 @@ class Connection(object):
         outFileName (str) : The name of the output file to save variants to
 
         """
-
+        start_time = time.time()
         self.vcf = Vcf()
         self.vcf.read_vcf_header(Config.options["vcf"])
         self.vcf.count_lines()
         self.chunks = max(math.ceil((self.vcf.totlines-self.vcf.headerlinenumber)/Config.options["chunksize"]), Config.options["ncores"])
         intervals = self.vcf.define_intervals(self.chunks)
+        if Config.options["verbose"]:
+            print("Variant metadata read in %s seconds"%(round(time.time() - start_time)))
         log = ("Will use %s chunks "
                 "each with %s variants "
                 "for a total of %s processed variants.")%(self.chunks, 
                                                           "/".join((str(interval) for interval in intervals)), 
                                                           self.vcf.totlines-self.vcf.headerlinenumber)
-        print(log)
-        pool = Pool(Config.options["ncores"])
-        results = pool.map(self.get_variants_by_chunk, range(1,self.chunks+1))
-        self.samples = results[0][0]
-        csvout, vcfout = self.print_header()
-        csvout += "".join(res[1][0] for res in results)
-        vcfout += "".join(res[1][1] for res in results)
+        if Config.options["verbose"]:
+            print(log)
         
         csv = outFileName+".csv"
         filteredvcf = outFileName+".vcf" if self.outputVcf else None
-        with open(csv, 'w') as f:
-            f.write(csvout)
-        if self.outputVcf:
-            with open(filteredvcf, 'w') as f:
-                f.write(vcfout)
+        
+        headerprinted = False
+        max_chunk_set = min(self.chunks, max(Config.options["ncores"], Config.options["nchunks"]))
+        
+        chunk_set = 0
+        while chunk_set < self.chunks:
+            incr = max_chunk_set if chunk_set + max_chunk_set <= self.chunks else self.chunks - chunk_set
+            chunk_set += incr
+            
+            pool = Pool(Config.options["ncores"])
+            results = pool.map(self.get_variants_by_chunk, range(chunk_set-incr+1,chunk_set+1))
+            self.samples = results[0][0]
+            if not headerprinted:
+                csvout, vcfout = self.print_header()
+            else:
+                csvout = ""
+                vcfout = ""
+            csvout += "".join(res[1][0] for res in results)
+            vcfout += "".join(res[1][1] for res in results)
+            
+            if not headerprinted:
+                opentype = 'w'
+                headerprinted = True
+            else:
+                opentype = 'a'
+            with open(csv, opentype) as f:
+                f.write(csvout)
+            if self.outputVcf:
+                with open(filteredvcf, opentype) as f:
+                    f.write(vcfout)
+            
+            del pool, results, csvout, vcfout
         
     def get_all_groups(self):
         """Define the groups to use to compare variants with each other"""

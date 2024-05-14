@@ -62,7 +62,7 @@ The optional PED file containing the family membership and parental relationship
 
 Use `varif` to filter and annotate variants submitted through a VCF file.
 
-```bash
+```
 options:
   -h, --help                show this help message and exit
   -vcf FILE                 VCF file
@@ -241,9 +241,15 @@ Finally, reference bases located within introns are removed before being replace
 
 Amino acids affected by the reference and alternate sequence are obtained by translating the initial and mutated CDS respectively. Additional codons can be added in a chosen window with `--prot-window-before` and `--prot-window-after` options; limited to the first and last codon (or when a stop codon is obtained). The position of the codon is then calculated from their rank from the beginning of the initial and mutated CDS and shown in the AAref and AAalt columns of the CSV file. The codon positions are associated with the total number of codons in each CDS, including the stop codon.
 
-# Multiprocessing and variant batches
+# Optimization
 
-The most time consuming step of the pipeline is when the ASPs are calculated. To save on memory, variants are processed by chunk whose number is determined from an upper limit of variants processed by chunk set by `--chunk-size` (5000 variants by chunk by default). Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The number of chunks is increased to match the number of cores if necessary.
+## Multiprocessing
+
+The most time consuming step of the pipeline is when the ASPs are calculated. To enable parallelization, variants are processed by chunk whose number is determined from an upper limit on the number of variants processed by chunk set by `--chunk-size` (5000 variants by chunk by default). Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The size of chunks is reduced to match the number of cores if necessary.
+
+## Memory
+
+Several chunks are processed in batches before being written to the output files. The option `--chunk-number` determines the number of chunks to run in a single batch (defaults to 1 or at least the number of cores requested). Processing less chunks in a single batch saves up on memory but results in a longer running time. As the number of chunks to run in a single batch cannot be below the number of cores requested with `--ncores`, reducing the number of cores along with the number of chunks per batch can further reduce memory usage. The chunk size set by `--chunk-size` can also be decreased to reduce memory consumption.
 
 # Limitations
 

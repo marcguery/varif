@@ -33,6 +33,9 @@ class Config(object):
         parser.add_argument('--chunk-size', dest = 'chunksize', type = int, default = 5000,
         metavar = "INT",
         help = 'Maximal number of variants to be processed in each chunk')
+        parser.add_argument('--chunk-number', dest = 'nchunks', type = int, default = 1,
+        metavar = "INT",
+        help = 'Number of chunks to process in a single batch')
 
         parser.add_argument('--ped', type = str, default = None,
         metavar = "FILE",
@@ -91,6 +94,9 @@ class Config(object):
 
         parser.add_argument('--output-vcf', dest = 'outputVcf', action = 'store_true',
         help = 'Whether to output filtered VCF files or not')
+        
+        parser.add_argument('--verbose', dest = 'verbose', action = 'store_true',
+        help = 'Show additionnal information')
 
         parser.add_argument('--version', dest = 'version', action = 'store_true',
         help = 'Show varif version')
