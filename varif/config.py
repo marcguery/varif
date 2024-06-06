@@ -9,7 +9,7 @@ class Config(object):
             Filter and annotate alleles likely to be
             differentially mutated among samples by comparing 
             their Allele Sample Proportions (ASPs)
-            ''', formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 30))
+            ''', formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 30, width = 80))
         
         parser.add_argument('-vcf', type = str, default = None,
         metavar = "FILE",
@@ -41,7 +41,7 @@ class Config(object):
         metavar = "FILE",
         help = 'PED file')
         parser.add_argument('--comparison', dest = 'comparison', type = str, default = "all",
-        metavar = "STR", help = 'Compare variants between "families", "lineages", "selfself" or "all"')
+        metavar = "STR", help = 'Compare variants between "families", "lineages", "self" or "all"')
 
         parser.add_argument('--fixed', dest = 'fixed', action = 'store_true',
         help = 'Add population-fixed variants in the result')
@@ -88,9 +88,18 @@ class Config(object):
         parser.add_argument('--max-similarity', dest = 'maxSimilarity', type = float, default = 1,
         metavar = "FLOAT",
         help = 'Maximal ratio of min(mutated samples prop)/max(mutated samples prop) between groups (non fixed mutations)')
-        parser.add_argument('--min-mutated', dest = 'minMutations', type = float, default = 0,
+        parser.add_argument('--min-maf1', dest = 'minMaf1', type = float, default = 0,
         metavar = "FLOAT",
-        help = 'Minimal proportion of mutated samples in the most mutated group (non fixed mutations)')
+        help = 'Minimal population MAF reached in a group to include a variant')
+        parser.add_argument('--max-maf1', dest = 'maxMaf1', type = float, default = 0.5,
+        metavar = "FLOAT",
+        help = 'Maximal population MAF reached in a group to include a variant')
+        parser.add_argument('--min-maf2', dest = 'minMaf2', type = float, default = 0,
+        metavar = "FLOAT",
+        help = 'Minimal population MAF reached in both groups to include a variant')
+        parser.add_argument('--max-maf2', dest = 'maxMaf2', type = float, default = 0.5,
+        metavar = "FLOAT",
+        help = 'Maximal population MAF reached in both groups to include a variant')
 
         parser.add_argument('--output-vcf', dest = 'outputVcf', action = 'store_true',
         help = 'Whether to output filtered VCF files or not')

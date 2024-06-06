@@ -88,8 +88,12 @@ class Variant(object):
 
         #Maximal proportion of missing or mixed asp in both groups
         maxmissing = self.config.options["maxMissing"]
-        #Minimal proportion of samples that are have a true mutation (differential groups only)
-        minmutated = self.config.options["minMutations"]
+        #Minimal and maximal population MAFs
+        minmaf1group = self.config.options["minMaf1"]
+        maxmaf1group = self.config.options["maxMaf1"]
+        minmaf2groups = self.config.options["minMaf2"]
+        maxmaf2groups = self.config.options["maxMaf2"]
+        assert minmaf2groups <= minmaf1group <= maxmaf1group <= maxmaf2groups
         #Maximal ratio of min(# of mutated samples)/max(# of mutated samples) (differential groups only)
         ratiomutationdiff = self.config.options["maxSimilarity"]
         
@@ -110,10 +114,17 @@ class Variant(object):
                 ming2asp = np.nanmin(aspGroup2Rank)
                 maxg2asp = np.nanmax(aspGroup2Rank)
             
-            propg1supp = len([supptominaltasp for supptominaltasp in aspGroup1Rank if supptominaltasp >= minaltasp])/len(aspGroup1Rank)
-            propg1infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup1Rank if infetomaxrefasp <= maxrefasp])/len(aspGroup1Rank)
-            propg2supp = len([supptominaltasp for supptominaltasp in aspGroup2Rank if supptominaltasp >= minaltasp])/len(aspGroup2Rank)
-            propg2infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup2Rank if infetomaxrefasp <= maxrefasp])/len(aspGroup2Rank)
+            leng1supp = len([supptominaltasp for supptominaltasp in aspGroup1Rank if supptominaltasp >= minaltasp])
+            leng1infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup1Rank if infetomaxrefasp <= maxrefasp])
+            leng2supp = len([supptominaltasp for supptominaltasp in aspGroup2Rank if supptominaltasp >= minaltasp])
+            leng2infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup2Rank if infetomaxrefasp <= maxrefasp])
+            propg1supp = leng1supp/len(aspGroup1Rank)
+            propg1infe = leng1infe/len(aspGroup1Rank)
+            propg2supp = leng2supp/len(aspGroup2Rank)
+            propg2infe = leng2infe/len(aspGroup2Rank)
+            
+            g1maf = min(leng1supp, leng1infe)/(leng1supp+leng1infe) if leng1supp+leng1infe > 0 else math.nan
+            g2maf = min(leng2supp, leng2infe)/(leng2supp+leng2infe) if leng2supp+leng2infe > 0 else math.nan
             
             self.props.append([round(100*propg1supp), round(100*propg1infe), round(100*propg2supp), round(100*propg2infe)])
 
@@ -121,14 +132,15 @@ class Variant(object):
             missingg2 = 1 - propg2infe - propg2supp
             #fixed mutation or reference
             if ming1asp >= minaltasp and ming2asp >= minaltasp or (maxg1asp <= maxrefasp and maxg2asp <= maxrefasp):
-                if max(missingg1, missingg2) <= maxmissing:
+                if max(missingg1, missingg2) <= maxmissing and minmaf2groups == 0:
                     self.types.append("fixed")
                 else:
                     self.types.append("ambiguous")
             #True mutational difference between groups
             elif ming1asp <= maxrefasp and maxg2asp >= minaltasp or (ming2asp <= maxrefasp and maxg1asp >= minaltasp):
                 propmutationdiff = min(propg1supp,propg2supp) / max(propg1supp,propg2supp)
-                if max(missingg1, missingg2) <= maxmissing and max(propg1supp,propg2supp) >= minmutated and propmutationdiff <= ratiomutationdiff:
+                mafcondition = maxmaf2groups >= np.nanmax([g1maf,g2maf]) >= minmaf1group and minmaf2groups <= np.nanmin([g1maf,g2maf]) <= maxmaf1group
+                if max(missingg1, missingg2) <= maxmissing and mafcondition and propmutationdiff <= ratiomutationdiff:
                     self.types.append("differential")
                 else:
                     self.types.append("ambiguous")

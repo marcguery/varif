@@ -71,41 +71,45 @@ options:
   -outfilename FILENAME     Name of the main output file (no extension) that
                             will be appended with the group names
   --ncores INT              Number of parallel jobs to run
-  --chunk-size INT          Maximal number of variants to be processed in
-                            each chunk
+  --chunk-size INT          Maximal number of variants to be processed in each
+                            chunk
+  --chunk-number INT        Number of chunks to process in a single batch
   --ped FILE                PED file
   --comparison STR          Compare variants between "families", "lineages",
-                            "selfself" or "all"
+                            "self" or "all"
   --fixed                   Add population-fixed variants in the result
-  --no-fixed                Do not add population-fixed mutations in the
-                            result
+  --no-fixed                Do not add population-fixed mutations in the result
   --all-variants            Add all variants in the result (including fixed
                             mutations)
-  --best-variants           Add only differentially mutated alleles in the
-                            main output (the whole variant for the output
-                            VCF)
+  --best-variants           Add only differentially mutated alleles in the main
+                            output (the whole variant for the output VCF)
   --all-regions             Add variants from all regions of the genome
   --gene-regions            Add variants only in gene-annotated regions
   --nucl-window-before INT  Number of bases to include before the allele
   --nucl-window-after INT   Number of bases to include after the allele
-  --prot-window-before INT  Number of amino acids to include before the
-                            allele
-  --prot-window-after INT   Number of amino acids to include after the
-                            allele
+  --prot-window-before INT  Number of amino acids to include before the allele
+  --prot-window-after INT   Number of amino acids to include after the allele
   --depth INT               Minimal read depth for a sample variant to be
                             considered
-  --ratio-alt FLOAT         Minimal sample proportion of allele/total read
-                            depth to ignore other alleles
-  --ratio-ref FLOAT         Maximal sample proportion of allele/total read
-                            depth to ignore it
-  --max-missing FLOAT       Maximal proportion of missing or mixed ASP in
-                            each group
+  --ratio-alt FLOAT         Minimal sample proportion of allele/total read depth
+                            to ignore other alleles
+  --ratio-ref FLOAT         Maximal sample proportion of allele/total read depth
+                            to ignore it
+  --max-missing FLOAT       Maximal proportion of missing or mixed ASP in each
+                            group
   --max-similarity FLOAT    Maximal ratio of min(mutated samples
-                            prop)/max(mutated samples prop) between groups
-                            (non fixed mutations)
-  --min-mutated FLOAT       Minimal proportion of mutated samples in the
-                            most mutated group (non fixed mutations)
+                            prop)/max(mutated samples prop) between groups (non
+                            fixed mutations)
+  --min-maf1 FLOAT          Minimal population MAF reached in a group to include
+                            a variant
+  --max-maf1 FLOAT          Maximal population MAF reached in a group to include
+                            a variant
+  --min-maf2 FLOAT          Minimal population MAF reached in both groups to
+                            include a variant
+  --max-maf2 FLOAT          Maximal population MAF reached in both groups to
+                            include a variant
   --output-vcf              Whether to output filtered VCF files or not
+  --verbose                 Show additionnal information
   --version                 Show varif version
 ```
 
@@ -176,9 +180,18 @@ The ASPs are calculated only if the sample read depth (the sum of all the reads 
 
 Variants with too many missing genotypes (because of insufficient depth or a mixed ASP) can be filtered out with `--max-missing` (default 1) which discards alleles if one group has more missing genotypes than the selected proportion.
 
-## Rare alleles
+## Population Minor Allele Frequencies (MAF)
 
-Alleles that are too rare can be filtered out by the option `--min-mutated` (default 0) which will discard alleles that are present in less than this proportion of the number of samples in both group.
+Variants can be filtered out based on the value of the population MAF in one of the groups compared or both of them. 
+
+A variant is kept if all these conditions are met:
+
+- The MAFs of both groups are above `--min-maf2` (default 0)
+- The MAF of one of the groups is above `--min-maf1` (default 0)
+- The MAF of one of the groups is below `--max-maf1` (default 0.5)
+- The MAF of both groups are below `--max-maf2` (default 0.5)
+
+Cutoffs of MAF should be set as follow: `--min-maf2` &le; `--min-maf1` &le; `--max-maf1` &le; `--max-maf2`.
 
 ## Group similarity
 

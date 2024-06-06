@@ -97,7 +97,7 @@ class Connection(object):
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
         if arguments["comparison"] is not None:
-            allowed_values = ["families", "lineages", "selfself", "all"]
+            allowed_values = ["families", "lineages", "self", "all"]
             if arguments["comparison"] not in allowed_values:
                 raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
             if arguments["ped"] is None and arguments["comparison"] != "all":
@@ -108,17 +108,30 @@ class Connection(object):
             if arguments["nchunks"] < 1:
                 raise ValueError("Number of chunks to run in a single batch must be at least 1, not %s"%(arguments["nchunks"]))
             else:
-                print("Reassigning number of chunks to run in a single batch to the number of cores: %s"%(arguments["ncores"]))
                 arguments["nchunks"] = arguments["ncores"]
+                print("Reassigned number of chunks to run in a single batch to the number of cores: %s"%(arguments["ncores"]))
         if arguments["chunksize"] < 500:
             raise ValueError("Chunk size must be at least 500, not %s"%(arguments["chunksize"]))
         for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
             if arguments[arg] < 0:
-                raise ValueError("DNA window '%s' must be above 0, not %s"%(arg, arguments[arg])) 
+                raise ValueError("DNA window '%s' must be above 0, not %s"%(arg, arguments[arg]))
         for arg in ["protWindowBefore", "protWindowAfter"]:
             if arguments[arg] < 0:
                 raise ValueError("Protein window '%s' must be above 0, not %s"%(arg, arguments[arg]))
-        for arg in ["minaltasp", "maxrefasp", "maxMissing", "maxSimilarity", "minMutations"]:
+        for arg in ["minMaf1", "maxMaf1", "minMaf2", "maxMaf2"]:
+            if not 0 <= arguments[arg] <= 0.5:
+                raise ValueError("MAF '%s' shoud be between 0 and 0.5, not %s"%(arg, arguments[arg]))
+        if arguments["minMaf1"] < arguments["minMaf2"] or arguments["maxMaf1"] > arguments["maxMaf2"]:
+            arguments["minMaf1"] = arguments["minMaf2"] if arguments["minMaf1"] < arguments["minMaf2"] else arguments["minMaf1"]
+            arguments["maxMaf1"] = arguments["maxMaf2"] if arguments["maxMaf1"] > arguments["maxMaf2"] else arguments["maxMaf1"]            
+            print("Reassigned 'minMaf1' and/or 'maxMaf1' to custom values of 'minMaf2' and/or 'maxMaf2'")
+        if not arguments["minMaf2"] <= arguments["minMaf1"] <= arguments["maxMaf1"] <= arguments["maxMaf2"]:
+            raise ValueError("MAF cutoffs did not satisfy these conditions:"+
+                             "\n minMaf2 (was %s) <= minMaf1 (was %s) <= maxMaf1 (was %s) <= maxMaf2 (was %s)"%(arguments["minMaf2"], 
+                                                                                              arguments["minMaf1"],
+                                                                                              arguments["maxMaf1"],
+                                                                                              arguments["maxMaf2"]))
+        for arg in ["minaltasp", "maxrefasp", "maxMissing", "maxSimilarity"]:
             if not 0 <= arguments[arg] <= 1:
                 raise ValueError("Filtering option '%s' must be a proportion, was %s"%(arg, arguments[arg]))
         assert arguments["maxrefasp"] <= arguments["minaltasp"], ("Reference ASP (was %s) should be <= to"
@@ -435,7 +448,7 @@ class Connection(object):
         """Define the groups to use to compare variants with each other"""
         compare_families = True if self.comparison == "families" else False
         compare_lineages = True if self.comparison == "lineages" else False
-        compare_selfself = True if self.comparison == "selfself" else False
+        compare_selfself = True if self.comparison == "self" else False
 
         if not compare_families and not compare_lineages and not compare_selfself:
             self.get_variants(self.outFile)
