@@ -119,18 +119,21 @@ class Vcf(object):
         return (list) : The unique sizes of all intervals
 
         """
+        assert (self.totlines-self.headerlinenumber) >= chunks >= 1
         base_interval = (self.totlines-self.headerlinenumber)//chunks
         last_interval = self.totlines-self.headerlinenumber - (base_interval * (chunks-1))
         extra = last_interval - base_interval
         
         self.intervals = []
         majorshift = self.headerlinenumber
+        latentshift = extra
+        minorshift = 1
         for part in range(chunks):
-            minorshift = 1 if extra > 0 else 0
+            if latentshift == 0:
+                majorshift += extra
+                minorshift = 0
             self.intervals.append([majorshift+part*(base_interval+minorshift),majorshift+(part+1)*(base_interval+minorshift)])
-            if extra > 0:
-                majorshift += 1
-                extra -= 1
+            latentshift -= 1
         
         uniquechunksizes = [size_inter for size_inter in set([interval[1]-interval[0] for interval in self.intervals])]
         if  min(uniquechunksizes) < 450:
