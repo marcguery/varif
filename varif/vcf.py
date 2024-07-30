@@ -120,24 +120,25 @@ class Vcf(object):
 
         """
         assert (self.totlines-self.headerlinenumber) >= chunks >= 1
-        base_interval = (self.totlines-self.headerlinenumber)//chunks
-        last_interval = self.totlines-self.headerlinenumber - (base_interval * (chunks-1))
-        extra = last_interval - base_interval
         
-        self.intervals = []
-        majorshift = self.headerlinenumber
-        latentshift = extra
-        minorshift = 1
-        for part in range(chunks):
-            if latentshift == 0:
-                majorshift += extra
-                minorshift = 0
-            self.intervals.append([majorshift+part*(base_interval+minorshift),majorshift+(part+1)*(base_interval+minorshift)])
-            latentshift -= 1
+        #To make the intervals as even as possible, they are formed using the formula:
+        # n = i * (x+1) + j * x
+        # with:
+        # n = total number of variants,
+        # x = n//(# of chunks),
+        # i and j the numbers of intervals of size x or x+1 so that the sum equals n
+        
+        base_interval = (self.totlines - self.headerlinenumber)//chunks #corresponds to 'x'
+        last_interval = self.totlines - self.headerlinenumber - (base_interval * (chunks - 1))
+        extra = last_interval - base_interval #remainder is equal to 'i'
+        majorshift = self.headerlinenumber #intervals must consider the VCF header as well
+
+        self.intervals = [[majorshift+part*(base_interval+1),majorshift+(part+1)*(base_interval+1)] for part in range(extra)]
+        self.intervals += [[majorshift+extra+part*(base_interval),majorshift+extra+(part+1)*(base_interval)] for part in range(extra,chunks)]
         
         uniquechunksizes = [size_inter for size_inter in set([interval[1]-interval[0] for interval in self.intervals])]
-        if  min(uniquechunksizes) < 450:
-            log = ("Low average chunk size detected of %s,"
+        if  min(uniquechunksizes) < 100:
+            log = ("Low chunk size of %s detected,"
                     " consider increasing the chunk size upper limit or reducing the number of cores.")%min(uniquechunksizes)
             print(log)
         

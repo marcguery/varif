@@ -77,14 +77,9 @@ options:
   --ped FILE                PED file
   --comparison STR          Compare variants between "families", "lineages",
                             "self" or "all"
-  --fixed                   Add population-fixed variants in the result
-  --no-fixed                Do not add population-fixed mutations in the result
-  --all-variants            Add all variants in the result (including fixed
-                            mutations)
-  --best-variants           Add only differentially mutated alleles in the main
-                            output (the whole variant for the output VCF)
-  --all-regions             Add variants from all regions of the genome
-  --gene-regions            Add variants only in gene-annotated regions
+  --fixed                   Keep population-fixed variants
+  --all-variants            Keep all variants
+  --exclude-intergenic      Keep only variants from gene-annotated regions
   --nucl-window-before INT  Number of bases to include before the allele
   --nucl-window-after INT   Number of bases to include after the allele
   --prot-window-before INT  Number of amino acids to include before the allele
@@ -108,8 +103,8 @@ options:
                             include a variant
   --max-maf2 FLOAT          Maximal population MAF reached in both groups to
                             include a variant
-  --output-vcf              Whether to output filtered VCF files or not
-  --verbose                 Show additionnal information
+  --output-vcf              Output filtered VCF file(s)
+  --verbose                 Show more details
   --version                 Show varif version
 ```
 
@@ -201,7 +196,7 @@ For example, a value of 0.2 will select only alleles with a proportion of mutate
 
 ## Genetic regions
 
-By default, all genomic regions are included with the option `--all-regions`. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--gene-regions`.
+By default, all genomic regions are included. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--exclude-intergenic`.
 
 # <a name="app"></a>Allele Population Proportions
 
@@ -211,7 +206,7 @@ The combination of ASPs are used to classify alleles that are:
   At least one ASP of one group is below or equal to maxRSP (does not contain the alternate allele) and at least one ASP of the other group is above or equal to minVSP (contains the alternate allele).
 - Fixed in the population:
   All ASPs of the samples are above or equal to minVSP or below or equal to maxRSP. Either the option `--all-variants` or `--fixed` will show these alleles.
-- Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these alleles while the option `--best-variants` will omit them. Note that the whole variant (with all alternate alleles merged in a single line) will be saved in the VCF file even if only one allele is passing the filters.
+- Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these alleles instead of filtering them out. Note that the whole variant (with all alternate alleles merged in a single line) will be saved in the VCF file even if only one allele is passing the filters.
 
 The exact proportion of mutated and reference alleles in both groups, refer to as 'Allele Population Proportions', is displayed at the Proportions column of the CSV file. There are 4 different percentages separated by a ':' corresponding respectively to:
 
@@ -287,7 +282,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
     varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
         -outfilename ./out/filtered-variants \
         --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-        --fixed --all-variants --all-regions \
+        --fixed --all-variants \
         --output-vcf --chunk-size 1000 --ncores 4
     ```
 
@@ -297,7 +292,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-       --fixed --all-variants --gene-regions \
+       --fixed --all-variants --exclude-intergenic \
        --nucl-window-before 10 --nucl-window-after 10
    ```
    
@@ -307,7 +302,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-       --no-fixed --best-variants --gene-regions \
+       --exclude-intergenic \
        --prot-window-before 5 --prot-window-after 5
    ```
    
@@ -317,7 +312,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-       --no-fixed --best-variants --gene-regions \
+       --exclude-intergenic \
        --ped my_ped.ped --comparison families \
        --prot-window-before 5 --prot-window-after 5
    ```
@@ -328,7 +323,7 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-       --no-fixed --best-variants --gene-regions \
+       --exclude-intergenic \
        --ped my_ped.ped --comparison lineages \
        --max-missing 0.2 \
        --prot-window-before 5 --prot-window-after 5

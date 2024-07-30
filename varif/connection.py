@@ -30,7 +30,7 @@ class Connection(object):
         comparison (str) : Type of comparison to use between groups
         fixed (bool) : Whether to include fixed variants in the output
         allVariants (bool) : Whether to include all variants in the output
-        allRegions (bool) : Whether to include all genomic regions in the output
+        intergenicRegions (bool) : Whether to include intergenic regions in the output
         outFile (str) : Name of the output file name
         outputVcf (bool) : Whether to also output the filtered VCF file
 
@@ -57,7 +57,7 @@ class Connection(object):
         self.comparison = Config.options["comparison"]
         self.fixed = Config.options["fixed"]
         self.allVariants = Config.options["allVariants"]
-        self.allRegions = Config.options["allRegions"]
+        self.intergenicRegions = Config.options["intergenicRegions"]
         self.outFile = Config.options["outFile"]
         self.outputVcf = Config.options["outputVcf"]
         self.get_all_groups()
@@ -93,15 +93,18 @@ class Connection(object):
         if Config.options["version"]:
             print(__version__)
             raise SystemExit
+        
         for arg in ["vcf", "gff", "fasta", "outFile"]:
             if arguments[arg] is None:
                 raise NameError("Argument '%s' is required"%arg)
+        
         if arguments["comparison"] is not None:
             allowed_values = ["families", "lineages", "self", "all"]
             if arguments["comparison"] not in allowed_values:
                 raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
             if arguments["ped"] is None and arguments["comparison"] != "all":
                 raise NameError("Argument 'ped' is required when comparing groups ('%s' comparison)"%(arguments["comparison"]))
+        
         if arguments["ncores"] < 1:
             raise ValueError("Number of cores must be at least 1, not %s"%(arguments["ncores"]))
         if arguments["nchunks"] < arguments["ncores"]:
@@ -110,14 +113,16 @@ class Connection(object):
             else:
                 arguments["nchunks"] = arguments["ncores"]
                 print("Reassigned number of chunks to run in a single batch to the number of cores: %s"%(arguments["ncores"]))
-        if arguments["chunksize"] < 500:
-            raise ValueError("Chunk size must be at least 500, not %s"%(arguments["chunksize"]))
+        if arguments["chunksize"] < 100:
+            raise ValueError("Chunk size must be at least 100, not %s"%(arguments["chunksize"]))
+    
         for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
             if arguments[arg] < 0:
                 raise ValueError("DNA window '%s' must be above 0, not %s"%(arg, arguments[arg]))
         for arg in ["protWindowBefore", "protWindowAfter"]:
             if arguments[arg] < 0:
                 raise ValueError("Protein window '%s' must be above 0, not %s"%(arg, arguments[arg]))
+        
         for arg in ["minMaf1", "maxMaf1", "minMaf2", "maxMaf2"]:
             if not 0 <= arguments[arg] <= 0.5:
                 raise ValueError("MAF '%s' shoud be between 0 and 0.5, not %s"%(arg, arguments[arg]))
@@ -131,14 +136,17 @@ class Connection(object):
                                                                                               arguments["minMaf1"],
                                                                                               arguments["maxMaf1"],
                                                                                               arguments["maxMaf2"]))
+        
         for arg in ["minaltasp", "maxrefasp", "maxMissing", "maxSimilarity"]:
             if not 0 <= arguments[arg] <= 1:
                 raise ValueError("Filtering option '%s' must be a proportion, was %s"%(arg, arguments[arg]))
         assert arguments["maxrefasp"] <= arguments["minaltasp"], ("Reference ASP (was %s) should be <= to"
                                                                   " Alternate ASP (was %s)")%(arguments["maxrefasp"], 
                                                                                               arguments["minaltasp"])
+        
         if len(arguments["outFile"].split("/")[-1]) > 100:
             raise ValueError("Name of the outfile must not exceed 100 characters")
+        
         print(("Running Varif %s"
               " with options \n%s")%(__version__, 
                                                     "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
@@ -337,7 +345,7 @@ class Connection(object):
 
             allvariants.variants[key]["features"] = gffIds
             self.define_categories(allvariants, key)
-            if len(allvariants.variants[key]["features"]) == 0 and self.allRegions is False:
+            if len(allvariants.variants[key]["features"]) == 0 and self.intergenicRegions is False:
                 continue #No feature-surrounded variants
             allvariants.variants[key]["refwindow"] = self.fasta.window_sequence(allvariants.variants[key]["chromosome"],
             allvariants.variants[key]["position"], allvariants.variants[key]["ref"],
