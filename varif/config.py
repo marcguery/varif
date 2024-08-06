@@ -1,7 +1,82 @@
 import argparse
 
 class Config(object):
+    """All variants found from a VCF file.
+    
+        options (dict): argaprse options provided by user
+        long_options (dict): Descriptive names (values) of argparse options (keys)
+    """
     options = {}
+    long_options = {}
+    
+    def check_options():
+        """
+        Verify the integrity of the arguments passed from the command line
+
+        """
+        
+        for arg in ["vcf", "gff", "fasta", "outFile"]:
+            if Config.options[arg] is None:
+                raise NameError("%s is required"%Config.long_options[arg])
+        
+        if Config.options["comparison"] is not None:
+            allowed_values = ["families", "lineages", "self", "all"]
+            if Config.options["comparison"] not in allowed_values:
+                raise ValueError("%s can only be one of '%s'"%(Config.long_options["comparison"],"', '".join(allowed_values)))
+            if Config.options["ped"] is None and Config.options["comparison"] != "all":
+                raise NameError("%s is required when comparing groups ('%s' comparison)"%(Config.long_options["ped"],
+                                                                                          Config.options["comparison"]))
+        
+        if Config.options["ncores"] < 1:
+            raise ValueError("%s must be at least 1, not %s"%(Config.long_options["ncores"], Config.options["ncores"]))
+        if Config.options["nchunks"] < Config.options["ncores"]:
+            if Config.options["nchunks"] < 1:
+                raise ValueError("%s must be at least 1, not %s"%(Config.long_options["nchunks"], Config.options["nchunks"]))
+            else:
+                print("Reassigning %s from %s to %s to match %s"%(Config.long_options["nchunks"], 
+                                                                  Config.options["nchunks"], 
+                                                                  Config.options["ncores"],
+                                                                  Config.long_options["ncores"]))
+                Config.options["nchunks"] = Config.options["ncores"]
+        if Config.options["chunksize"] < 100:
+            raise ValueError("%s must be at least 100, not %s"%(Config.long_options["chunksize"], Config.options["chunksize"]))
+    
+        for arg in ["nuclWindowBefore", "nuclWindowAfter", "protWindowBefore", "protWindowAfter"]:
+            if Config.options[arg] < 0:
+                raise ValueError("%s must be >= 0, not %s"%(Config.long_options[arg], Config.options[arg]))
+        
+        if Config.options["minSamplesDiff"] < 0:
+            raise ValueError("%s must be >= 0, not %s"%(Config.long_options["minSamplesDiff"], Config.options["minSamplesDiff"]))
+        
+        for arg in ["minMaf1", "maxMaf1", "minMaf2", "maxMaf2"]:
+            if not 0 <= Config.options[arg] <= 0.5:
+                raise ValueError("%s shoud be between 0 and 0.5, not %s"%(Config.long_options[arg], Config.options[arg]))
+        if Config.options["minMaf1"] < Config.options["minMaf2"] or Config.options["maxMaf1"] > Config.options["maxMaf2"]:
+            Config.options["minMaf1"] = Config.options["minMaf2"] if Config.options["minMaf1"] < Config.options["minMaf2"] else Config.options["minMaf1"]
+            Config.options["maxMaf1"] = Config.options["maxMaf2"] if Config.options["maxMaf1"] > Config.options["maxMaf2"] else Config.options["maxMaf1"]            
+            print("Reassigned 'minMaf1' and/or 'maxMaf1' to custom values of 'minMaf2' and/or 'maxMaf2'")
+        if not Config.options["minMaf2"] <= Config.options["minMaf1"] <= Config.options["maxMaf1"] <= Config.options["maxMaf2"]:
+            raise ValueError("MAF cutoffs did not satisfy these conditions:"+
+                             "\n %s (was %s) <= %s (was %s) <= %s (was %s) <= %s (was %s)"%(Config.long_options["minMaf2"],
+                                                                                            Config.options["minMaf2"],
+                                                                                                           Config.long_options["minMaf1"],
+                                                                                                           Config.options["minMaf1"],
+                                                                                                           Config.long_options["maxMaf1"],
+                                                                                                           Config.options["maxMaf1"],
+                                                                                                           Config.long_options["maxMaf2"],
+                                                                                                           Config.options["maxMaf2"]))
+        
+        for arg in ["minaltasp", "maxrefasp", "maxMissing", "minApfDiff"]:
+            if not 0 <= Config.options[arg] <= 1:
+                raise ValueError("%s must be a proportion, was %s"%(Config.long_options[arg], Config.options[arg]))
+        assert Config.options["maxrefasp"] <= Config.options["minaltasp"], ("%s (was %s) should be <= to"
+                                                                  " %s (was %s)")%(Config.long_options["maxrefasp"],
+                                                                                   Config.options["maxrefasp"],
+                                                                                   Config.long_options["minaltasp"],
+                                                                                              Config.options["minaltasp"])
+        
+        if len(Config.options["outFile"].split("/")[-1]) > 100:
+            raise ValueError("%s must not exceed 100 characters"%(Config.long_options["outFile"]))
 
     @staticmethod
     def set_options():
@@ -33,7 +108,7 @@ class Config(object):
         parser.add_argument('--chunk-size', dest = 'chunksize', type = int, default = 5000,
                             metavar = "INT",
                             help = 'Maximal number of variants to be processed in each chunk')
-        parser.add_argument('--chunk-number', dest = 'nchunks', type = int, default = 1,
+        parser.add_argument('--nchunks', dest = 'nchunks', type = int, default = 1,
                             metavar = "INT",
                             help = 'Number of chunks to process in a single batch')
 
@@ -43,16 +118,6 @@ class Config(object):
         parser.add_argument('--comparison', dest = 'comparison', type = str, default = "all",
                             metavar = "STR", 
                             help = 'Compare variants between "families", "lineages", "self" or "all"')
-
-        parser.add_argument('--fixed', dest = 'fixed', action = 'store_true',
-                            help = 'Keep population-fixed variants')
-
-        parser.add_argument('--all-variants', dest = 'allVariants', action = 'store_true',
-                            help = 'Keep all variants')
-        
-        parser.add_argument('--exclude-intergenic', dest = 'intergenicRegions', action = 'store_false',
-                            default = True,
-                            help = 'Keep only variants from gene-annotated regions')
 
         parser.add_argument('--nucl-window-before', dest = 'nuclWindowBefore', type = int, default = 0,
                             metavar = "INT",
@@ -76,25 +141,32 @@ class Config(object):
         parser.add_argument('--ratio-ref', dest = 'maxrefasp', type = float, default = 0.2,
                             metavar = "FLOAT",
                             help = 'Maximal sample proportion of allele/total read depth to ignore it')
-
+        
+        parser.add_argument('--exclude-intergenic', dest = 'intergenicRegions', action = 'store_false',
+                            default = True,
+                            help = 'Keep only variants from gene-annotated regions')
         parser.add_argument('--max-missing', dest = 'maxMissing', type = float, default = 1,
                             metavar = "FLOAT",
-                            help = 'Maximal proportion of missing or mixed ASP in each group')
-        parser.add_argument('--max-similarity', dest = 'maxSimilarity', type = float, default = 1,
+                            help = 'Maximal proportion of missing or heterozygous loci in each group')
+        parser.add_argument('--min-apf-diff', dest = 'minApfDiff', type = float, default = 0,
                             metavar = "FLOAT",
-                            help = 'Maximal ratio of min(mutated samples prop)/max(mutated samples prop) between groups (non fixed mutations)')
+                            help = 'Minimal difference in allele population frequency between groups')
+        parser.add_argument('--min-samples-diff', dest = 'minSamplesDiff', type = int, default = 1,
+                            metavar = "INT",
+                            help = 'Minimal difference in the number of samples with a distinct allele between groups')
+        
         parser.add_argument('--min-maf1', dest = 'minMaf1', type = float, default = 0,
                             metavar = "FLOAT",
-                            help = 'Minimal population MAF reached in a group to include a variant')
+                            help = 'Minimal population MAF reached in a group')
         parser.add_argument('--max-maf1', dest = 'maxMaf1', type = float, default = 0.5,
                             metavar = "FLOAT",
-                            help = 'Maximal population MAF reached in a group to include a variant')
+                            help = 'Maximal population MAF reached in a group')
         parser.add_argument('--min-maf2', dest = 'minMaf2', type = float, default = 0,
                             metavar = "FLOAT",
-                            help = 'Minimal population MAF reached in both groups to include a variant')
+                            help = 'Minimal population MAF reached in both groups')
         parser.add_argument('--max-maf2', dest = 'maxMaf2', type = float, default = 0.5,
                             metavar = "FLOAT",
-                            help = 'Maximal population MAF reached in both groups to include a variant')
+                            help = 'Maximal population MAF reached in both groups')
 
         parser.add_argument('--output-vcf', dest = 'outputVcf', action = 'store_true',
                             help = 'Output filtered VCF file(s)')
@@ -107,3 +179,16 @@ class Config(object):
         
         args = parser.parse_args()
         Config.options = vars(args)
+        Config.long_options = {"vcf": "VCF file", "gff": "GFF file", "fasta": "FASTA file",
+                               "outFile": "Output file name", "ncores": "Number of cores",
+                               "chunksize": "Chunk size", "nchunks": "Chunk number",
+                               "ped": "PED file", "comparison": "Comparison",
+                               "nuclWindowBefore": "Nucleotides before", "nuclWindowAfter": "Nucleotides after",
+                               "protWindowBefore": "Aminoacids before", "protWindowAfter": "Aminoacids after",
+                               "mindepth" : "Minimal depth", "minaltasp" : "Alt ASP", "maxrefasp": "Ref ASP", 
+                               "intergenicRegions": "Intergenic regions", "maxMissing": "Max. ratio of missing samples",
+                               "minApfDiff": "Min. diff in APF", "minSamplesDiff": "Min. number of diff. samples",
+                               "minMaf1": "Min. MAF (1 group)", "maxMaf1": "Max. MAF (1 group)",
+                               "minMaf2": "Min. MAF (2 groups)", "maxMaf2": "Max. MAF (2 groups)",
+                               "outputVcf": "Output VCF", "verbose":"Verbosity",
+                               "version": "Version"}

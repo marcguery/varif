@@ -73,13 +73,10 @@ options:
   --ncores INT              Number of parallel jobs to run
   --chunk-size INT          Maximal number of variants to be processed in each
                             chunk
-  --chunk-number INT        Number of chunks to process in a single batch
+  --nchunks INT             Number of chunks to process in a single batch
   --ped FILE                PED file
   --comparison STR          Compare variants between "families", "lineages",
                             "self" or "all"
-  --fixed                   Keep population-fixed variants
-  --all-variants            Keep all variants
-  --exclude-intergenic      Keep only variants from gene-annotated regions
   --nucl-window-before INT  Number of bases to include before the allele
   --nucl-window-after INT   Number of bases to include after the allele
   --prot-window-before INT  Number of amino acids to include before the allele
@@ -90,19 +87,17 @@ options:
                             to ignore other alleles
   --ratio-ref FLOAT         Maximal sample proportion of allele/total read depth
                             to ignore it
-  --max-missing FLOAT       Maximal proportion of missing or mixed ASP in each
-                            group
-  --max-similarity FLOAT    Maximal ratio of min(mutated samples
-                            prop)/max(mutated samples prop) between groups (non
-                            fixed mutations)
-  --min-maf1 FLOAT          Minimal population MAF reached in a group to include
-                            a variant
-  --max-maf1 FLOAT          Maximal population MAF reached in a group to include
-                            a variant
-  --min-maf2 FLOAT          Minimal population MAF reached in both groups to
-                            include a variant
-  --max-maf2 FLOAT          Maximal population MAF reached in both groups to
-                            include a variant
+  --exclude-intergenic      Keep only variants from gene-annotated regions
+  --max-missing FLOAT       Maximal proportion of missing or heterozygous loci
+                            in each group
+  --min-apf-diff FLOAT      Minimal difference in allele population frequency
+                            between groups
+  --min-samples-diff INT    Minimal difference in the number of samples with a
+                            distinct allele between groups
+  --min-maf1 FLOAT          Minimal population MAF reached in a group
+  --max-maf1 FLOAT          Maximal population MAF reached in a group
+  --min-maf2 FLOAT          Minimal population MAF reached in both groups
+  --max-maf2 FLOAT          Maximal population MAF reached in both groups
   --output-vcf              Output filtered VCF file(s)
   --verbose                 Show more details
   --version                 Show varif version
@@ -114,7 +109,7 @@ Alleles passing the filters will be stored in a CSV file (multiple alleles at th
 
 Here is an example of the  `varif` main output obtained with default parameters:
 
-| Chromosome | Position | Type                     | Ref  | Alt  | CDSref           | CDSalt   | AAref      | AAalt       | Annotation                   | Proportions       | S1       | S2       | S3       |
+| Chromosome | Position | Type                     | Ref  | Alt  | CDSref           | CDSalt   | AAref      | AAalt       | Annotation                   | Frequencies       | S1       | S2       | S3       |
 | ---------- | -------- | ------------------------ | ---- | ---- | ---------------- | -------- | ---------- | ----------- | ---------------------------- | ----------------- | -------- | -------- | -------- |
 | Chr1       | 123123   | SNP                      | C    | G    | NA               | NA       | NA         | NA          | NA                           | `067:033:067:033` | 0.912643 | 0.000000 | 1.000000 |
 | Chr1       | 456456   | SNP,gene,mRNA            | T    | A    | NA               | NA       | NA         | NA          | Unknown function (gene_id_1) | `033:033:033:033` | 0.540000 | 0.000000 | 1.000000 |
@@ -135,7 +130,7 @@ The output CSV file separated by semicolons contains:
 - ***AAref*** : The amino acids resulting from the windowed reference sequence followed by the codon position\*
 - ***AAalt*** : The amino acids resulting from the windowed alternate sequences followed by the codon position\*
 - ***Annotation*** : The annotation described in the GFF file followed by the gene identifier\*\*
-- ***Proportions*** : The proportion of mutated and reference alleles in the population (see [Allele Population Proportions](#app))
+- ***Frequencies*** : The frequencies of mutated and reference alleles in the population (see [Allele Population Frequencies](#apf))
 - The remaining columns contain the allele proportion of each sample (ASPs)
 
 \*: Applies for CDS regions, otherwise *NA*
@@ -144,36 +139,63 @@ The output CSV file separated by semicolons contains:
 
 Note that when the CDSalt field is empty and that the AAalt field contains '*(0/0)*', this means that both reference and mutated CDS sequences are identical (this can happen when an INDEL occurs at the edge of a CDS and an intron).
 
-## <a name="groups"></a>Sample groups
-
-Samples groups are used to determine which allele is differentially distributed based on the presence of true mutated samples and true reference samples between two groups. It is possible to separate samples into groups and look for alleles differentially distributed between those groups by providing the option `--comparison` with one of the keywords *families*,*selfself*, *lineages*, or *all* (the default). Samples are grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution can be compared:
-
-- between every combination of families (*families*),
-- within all members of each family (*selfself*),
-- between direct parents and offspring  (*lineages*),
-- or all-against-all VCF samples (*all*).
-
-The relationship between the two groups is symmetrical, meaning that alleles present in either group are candidates for being considered differentially distributed (see [Allelic distribution](#alleledistrib) for more information).
-
-# Filters
-
 ## Allele Sample Proportions (ASP)
 
-There are 2 cut-offs of minimal alternate ASP (minVSP with `--ratio-alt`) and maximal reference ASP (maxRSP with `--ratio-ref`) used by `varif` to determine if alleles are differentially distributed in a population. By default, minVSP is equal to 0.8 and maxRSP to 0.2.
+There are 2 cut-offs of minimal alternate ASP (minVSP with `--ratio-alt`) and maximal reference ASP (maxRSP with `--ratio-ref`) to determine if a sample is carrying the mutated or non-mutated allele. By default, minVSP is equal to 0.8 and maxRSP to 0.2.
 
 For each allele and for each sample, the ASP is calculated using the different allele read depths (ARD):
 
 ***ASP*** = (*alternate ARD*) / (*all alternates ARD* + *reference ARD*)
 
-If the ASP is above minVSP, the locus is considered to carry the alternate allele only, while if the ASP is below maxRSP, it is considered to not carry the alternate allele at all. When the ASP is between maxRSP and minVSP, the genotype cannot be called and the locus is mixed.
+If the ASP is above minVSP, the sample is attributed the alternate allele only, while if the ASP is below maxRSP, it is attributed the reference allele only. When the ASP is between maxRSP and minVSP, the genotype cannot be called and the variant is heterozygous.
+
+## <a name="groups"></a>Sample groups
+
+Samples can be separated into groups which can have their allele frequencies compared with the option `--comparison` with one of the keywords *families*,*self*, *lineages*, or *all* (the default). Samples are grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution can be compared:
+
+- between every combination of families (*families*),
+- within all members of each family (*self*),
+- between direct parents and offspring  (*lineages*),
+- or all-against-all VCF samples (*all*).
+
+## <a name="app"></a>Allele Population Frequencies
+
+The exact frequencies of mutated and reference alleles in both groups, refer to as 'Allele Population Frequencies', are displayed at the Frequencies column of the CSV file. There are 4 different percentages separated by a ':' corresponding respectively to:
+
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the locus *is* the alternate allele
+- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the locus *is not* the alternate allele
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the locus *is* the alternate allele
+- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the locus *is not* the alternate allele
+
+Note that when the `--comparison` option is set to *all*, the third and fourth percentages are equal to the first and second.
+
+As a result, a fixed allele can either have the first and the third percentage equal to 0 (fixed reference allele in the population) or the second and the fourth equal to 0 (fixed mutated allele in the population).
+
+Differentially distributed alleles can either have the first and the fourth percentages different from 0, or the second and the third percentages different from 0 (allele present in at least one sample from one group and absent from at least one sample from the other group).
+
+Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a heterozygous variant call).
+
+# Filters
 
 ## Minimal depth
 
 The ASPs are calculated only if the sample read depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
 
+## Allele population frequencies
+
+The options `--min-apf-diff` (default 0) and `--min-samples-diff` (default 1) compare the prevalence of mutated alleles (determined for each sample from ASPs) between the groups defined by the PED file.
+
+The option `--min-apf-diff` corresponds to the minimal difference in (either mutated or reference) allele  frequencies between groups to keep a variant.
+
+The option `--min-samples-diff` refers to the number of samples with opposite alleles in each group. For example, a value of 2 will keep only variants with at least 2 samples with a mutated allele in a group and 2 samples with a reference allele in the other group. A value of 0 will not filter out any variant. The value of this option is limited by the number of samples in each group independently (potentially resulting in unequal cutoffs between groups).
+
+## Genetic regions
+
+By default, all genomic regions are included. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--exclude-intergenic`.
+
 ## Missing data
 
-Variants with too many missing genotypes (because of insufficient depth or a mixed ASP) can be filtered out with `--max-missing` (default 1) which discards alleles if one group has more missing genotypes than the selected proportion.
+Variants with too many missing genotypes (because of insufficient depth or a heterozygous locus) can be filtered out with `--max-missing` (default 1) which discards alleles if one group has more missing genotypes than the selected proportion.
 
 ## Population Minor Allele Frequencies (MAF)
 
@@ -187,41 +209,6 @@ A variant is kept if all these conditions are met:
 - The MAF of both groups are below `--max-maf2` (default 0.5)
 
 Cutoffs of MAF should be set as follow: `--min-maf2` &le; `--min-maf1` &le; `--max-maf1` &le; `--max-maf2`.
-
-## Group similarity
-
-Group-specific alleles can be selected with the option `--max-similarity` (default 1) by providing the maximal ratio of the mutant proportion of the less mutated group over the mutant proportion of the most mutated group. 
-
-For example, a value of 0.2 will select only alleles with a proportion of mutated samples that is at least 5 times higher in one group compared to the other.
-
-## Genetic regions
-
-By default, all genomic regions are included. However, alleles outside a gene (all of the reference bases are located outside of a gene or in an intron) can be removed from the output with the option `--exclude-intergenic`.
-
-# <a name="app"></a>Allele Population Proportions
-
-The combination of ASPs are used to classify alleles that are:
-
-- Differentially distributed between two groups:
-  At least one ASP of one group is below or equal to maxRSP (does not contain the alternate allele) and at least one ASP of the other group is above or equal to minVSP (contains the alternate allele).
-- Fixed in the population:
-  All ASPs of the samples are above or equal to minVSP or below or equal to maxRSP. Either the option `--all-variants` or `--fixed` will show these alleles.
-- Not differentially distributed among samples, for all other cases. The option `--all-variants` will show these alleles instead of filtering them out. Note that the whole variant (with all alternate alleles merged in a single line) will be saved in the VCF file even if only one allele is passing the filters.
-
-The exact proportion of mutated and reference alleles in both groups, refer to as 'Allele Population Proportions', is displayed at the Proportions column of the CSV file. There are 4 different percentages separated by a ':' corresponding respectively to:
-
-- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the locus *is* the alternate allele
-- the percentage of samples from group 1 (first name/identifier in CSV file or parents) for which the locus *is not* the alternate allele
-- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the locus *is* the alternate allele
-- the percentage of samples from group 2 (second name/identifier in CSV file or offspring) for which the locus *is not* the alternate allele
-
-Note that when the `--comparison` option is set to *all*, the third and fourth percentages are equal to the first and second.
-
-As a result, a fixed allele can either have the first and the third percentage equal to 0 (fixed reference in the population) or the second and the fourth equal to 0 (fixed allele in the population).
-
-Differentially distributed alleles can either have the first and the fourth percentages different from 0, or the second and the third  percentages different from 0 (allele present in at least one sample from one group and absent from at least one sample from the other group).
-
-Percentages within each group do not add up to 100 when there are samples that could not be genotyped (because of insufficient depth or a mixed allele).
 
 # Sequence annotations
 
@@ -257,9 +244,13 @@ The most time consuming step of the pipeline is when the ASPs are calculated. To
 
 ## Memory
 
-Several chunks are processed in batches before being written to the output files. The option `--chunk-number` determines the number of chunks to run in a single batch (defaults to 1 or at least the number of cores requested). Processing less chunks in a single batch saves up on memory but results in a longer running time. As the number of chunks to run in a single batch cannot be below the number of cores requested with `--ncores`, reducing the number of cores along with the number of chunks per batch can further reduce memory usage. The chunk size set by `--chunk-size` can also be decreased to reduce memory consumption.
+Several chunks are processed in batches before being written to the output files. The option `--nchunks` determines the number of chunks to run in a single batch (defaults to 1 or at least the number of cores requested). Processing less chunks in a single batch saves up on memory but results in a longer running time. As the number of chunks to run in a single batch cannot be below the number of cores requested with `--ncores`, reducing the number of cores along with the number of chunks per batch can further reduce memory usage. The chunk size set by `--chunk-size` can also be decreased to reduce memory consumption.
 
 # Limitations
+
+## Reference and mutated alleles
+
+For now, `varif` compares allele frequencies of the alternate allele with allele frequencies of the **non-alternate** allele(s) rather than the reference allele. In this documentation, reference should then be read as non-alternate. Although confusing reference with non-alternate can be appropriate with bi-allelic variants, this is not the case with multi-allelic variants.
 
 ## Multi allelic CDS
 
@@ -277,54 +268,87 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
 
 # Examples
 
-1. Save all possible alleles regardless of their ASPs, processing in parallel 4 batches of 1000 variants.
+1. 
+   
+    - Save all possible alleles regardless of their ASPs (calculated if &gt; 5 read depth)
+    - Process in parallel 4 batches of 1000 variants
+    
     ```bash
     varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
         -outfilename ./out/filtered-variants \
-        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-        --fixed --all-variants \
-        --output-vcf --chunk-size 1000 --ncores 4
+        --output-vcf --chunk-size 1000 --ncores 4 \
+        --depth 5 \
+        --min-apf-diff 0 --min-samples-diff 0
     ```
+    
+2. Same as 1. +
 
-2. Save alleles falling in a gene regardless of their ASPs with 10 bases upstream and downstream of the alleles.
-
-   ```bash
-   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
-       -outfilename ./out/filtered-variants \
-       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
-       --fixed --all-variants --exclude-intergenic \
-       --nucl-window-before 10 --nucl-window-after 10
-   ```
+   - Include only variants within genes
+   - Add 10 bases upstream and downstream of the alleles
+   - Add 5 amino acids upstream and downstream of the alleles
    
-3. Save alleles falling in a gene and differentially distributed (at least one sample with the allele and one sample without it among all samples) with protein sequences including 5 amino acids before and after the allele.
-
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
-       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --output-vcf --chunk-size 1000 --ncores 4 \
+       --depth 5 \
+       --min-apf-diff 0 --min-samples-diff 0 \
        --exclude-intergenic \
+       --nucl-window-before 10 --nucl-window-after 10 \
        --prot-window-before 5 --prot-window-after 5
    ```
    
-4. Save alleles falling in a gene and differentially distributed between families (at least one sample with the allele in a family and one sample without it in another one) with protein sequences including 5 amino acids before and after each allele.
+3. Same as 2. +
 
+   - Attribute alternate allele to samples with ASP &ge; 0.8, reference allele to samples with ASP &le; 0.2
+   - Keep only variants differentially distributed among all samples : &ge; 1 sample with an allele and &ge; 1 sample with the other allele
+   
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
+       --output-vcf --chunk-size 1000 --ncores 4 \
        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --min-apf-diff 0 --min-samples-diff 1 \
        --exclude-intergenic \
-       --ped my_ped.ped --comparison families \
-       --prot-window-before 5 --prot-window-after 5
+       --nucl-window-before 10 --nucl-window-after 10 \
+       --prot-window-before 5 --prot-window-after 5 \
+       --comparison all
    ```
    
-4. Save alleles falling in a gene and differentially distributed in lineages (at least one sample with the allele in a parent and one sample without it in an offspring and inversely) only if there are at least 80% of non missing genotypes in both groups.
-
+4. Same as 2. +
+   
+   - Attribute alternate allele to samples with ASP &ge; 0.8, reference allele to samples with ASP &le; 0.2
+   
+   - Keep only variants differentially distributed between pairs of families of samples (PED file) : &ge; 1 sample with an allele in one family and &ge; 1 sample with the other allele in the other family
+   
    ```bash
    varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
        -outfilename ./out/filtered-variants \
+       --output-vcf --chunk-size 1000 --ncores 4 \
        --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --min-apf-diff 0 --min-samples-diff 1 \
        --exclude-intergenic \
+       --nucl-window-before 10 --nucl-window-after 10 \
+       --prot-window-before 5 --prot-window-after 5 \
+       --ped my_ped.ped --comparison families
+   ```
+   
+4. Same as 2. +
+
+   - Attribute alternate allele to samples with ASP &ge; 0.8, reference allele to samples with ASP &le; 0.2
+   
+   - Keep only variants differentially distributed between pairs of parent/offspring of samples (PED file) : &ge; 2 samples with an allele in one parent/offspring and &ge; 2 samples with the other allele in the other parent/offspring
+   - Keep variants with 80 % of samples with non-missing call in each group
+   
+   ```bash
+   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
+       -outfilename ./out/filtered-variants \
+       --output-vcf --chunk-size 1000 --ncores 4 \
+       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --min-apf-diff 0 --min-samples-diff 2 \
+       --exclude-intergenic \
+       --nucl-window-before 10 --nucl-window-after 10 \
+       --prot-window-before 5 --prot-window-after 5 \
        --ped my_ped.ped --comparison lineages \
-       --max-missing 0.2 \
-       --prot-window-before 5 --prot-window-after 5
+       --max-missing 0.2
    ```

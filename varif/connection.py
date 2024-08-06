@@ -28,8 +28,6 @@ class Connection(object):
         group2 (list) : Samples belonging to the 'group2' to be compared
         chunks (int) : Number of chunks to use to process the variants separately
         comparison (str) : Type of comparison to use between groups
-        fixed (bool) : Whether to include fixed variants in the output
-        allVariants (bool) : Whether to include all variants in the output
         intergenicRegions (bool) : Whether to include intergenic regions in the output
         outFile (str) : Name of the output file name
         outputVcf (bool) : Whether to also output the filtered VCF file
@@ -38,15 +36,21 @@ class Connection(object):
 
         start_time = time.time()
         Config.set_options()
-        self.check_arguments(Config.options)
+        if Config.options["version"]:
+            print(__version__)
+            raise SystemExit        
+        Config.check_options()
+        print(("Running Varif %s"
+              " with options \n%s")%(__version__,
+                                     "\n".join(" : ".join([Config.long_options[opt], str(Config.options[opt])]) for opt in Config.options)))
         self.vcf = None
         self.families = Families()
         if Config.options["ped"] is not None:
             self.families.read_ped(Config.options["ped"])
         self.annotations = Annotations()
-        self.annotations.load_annotations_from_GFF(Config.options['gff'])
+        self.annotations.load_annotations_from_GFF(Config.options["gff"])
         self.fasta = Fasta()
-        self.fasta.load_data_from_FASTA(Config.options['fasta'])
+        self.fasta.load_data_from_FASTA(Config.options["fasta"])
         if Config.options["verbose"]:
             print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
 
@@ -55,14 +59,10 @@ class Connection(object):
         self.group2 = []
         self.chunks = 1
         self.comparison = Config.options["comparison"]
-        self.fixed = Config.options["fixed"]
-        self.allVariants = Config.options["allVariants"]
         self.intergenicRegions = Config.options["intergenicRegions"]
         self.outFile = Config.options["outFile"]
         self.outputVcf = Config.options["outputVcf"]
         self.get_all_groups()
-    
-
         
     def print_log(self, allvariants, variantId):
         """
@@ -82,74 +82,6 @@ class Connection(object):
             pass
         if log != "":
             print(log, file = stderr)
-    
-    def check_arguments(self, arguments):
-        """
-        Verify the integrity of the arguments passed from the command line
-
-        arguments (dict) : Name of the argument (key) and its value
-
-        """
-        if Config.options["version"]:
-            print(__version__)
-            raise SystemExit
-        
-        for arg in ["vcf", "gff", "fasta", "outFile"]:
-            if arguments[arg] is None:
-                raise NameError("Argument '%s' is required"%arg)
-        
-        if arguments["comparison"] is not None:
-            allowed_values = ["families", "lineages", "self", "all"]
-            if arguments["comparison"] not in allowed_values:
-                raise ValueError("Argument 'comparison' can only be one of '%s'"%("', '".join(allowed_values)))
-            if arguments["ped"] is None and arguments["comparison"] != "all":
-                raise NameError("Argument 'ped' is required when comparing groups ('%s' comparison)"%(arguments["comparison"]))
-        
-        if arguments["ncores"] < 1:
-            raise ValueError("Number of cores must be at least 1, not %s"%(arguments["ncores"]))
-        if arguments["nchunks"] < arguments["ncores"]:
-            if arguments["nchunks"] < 1:
-                raise ValueError("Number of chunks to run in a single batch must be at least 1, not %s"%(arguments["nchunks"]))
-            else:
-                arguments["nchunks"] = arguments["ncores"]
-                print("Reassigned number of chunks to run in a single batch to the number of cores: %s"%(arguments["ncores"]))
-        if arguments["chunksize"] < 100:
-            raise ValueError("Chunk size must be at least 100, not %s"%(arguments["chunksize"]))
-    
-        for arg in ["nuclWindowBefore", "nuclWindowAfter"]:
-            if arguments[arg] < 0:
-                raise ValueError("DNA window '%s' must be above 0, not %s"%(arg, arguments[arg]))
-        for arg in ["protWindowBefore", "protWindowAfter"]:
-            if arguments[arg] < 0:
-                raise ValueError("Protein window '%s' must be above 0, not %s"%(arg, arguments[arg]))
-        
-        for arg in ["minMaf1", "maxMaf1", "minMaf2", "maxMaf2"]:
-            if not 0 <= arguments[arg] <= 0.5:
-                raise ValueError("MAF '%s' shoud be between 0 and 0.5, not %s"%(arg, arguments[arg]))
-        if arguments["minMaf1"] < arguments["minMaf2"] or arguments["maxMaf1"] > arguments["maxMaf2"]:
-            arguments["minMaf1"] = arguments["minMaf2"] if arguments["minMaf1"] < arguments["minMaf2"] else arguments["minMaf1"]
-            arguments["maxMaf1"] = arguments["maxMaf2"] if arguments["maxMaf1"] > arguments["maxMaf2"] else arguments["maxMaf1"]            
-            print("Reassigned 'minMaf1' and/or 'maxMaf1' to custom values of 'minMaf2' and/or 'maxMaf2'")
-        if not arguments["minMaf2"] <= arguments["minMaf1"] <= arguments["maxMaf1"] <= arguments["maxMaf2"]:
-            raise ValueError("MAF cutoffs did not satisfy these conditions:"+
-                             "\n minMaf2 (was %s) <= minMaf1 (was %s) <= maxMaf1 (was %s) <= maxMaf2 (was %s)"%(arguments["minMaf2"], 
-                                                                                              arguments["minMaf1"],
-                                                                                              arguments["maxMaf1"],
-                                                                                              arguments["maxMaf2"]))
-        
-        for arg in ["minaltasp", "maxrefasp", "maxMissing", "maxSimilarity"]:
-            if not 0 <= arguments[arg] <= 1:
-                raise ValueError("Filtering option '%s' must be a proportion, was %s"%(arg, arguments[arg]))
-        assert arguments["maxrefasp"] <= arguments["minaltasp"], ("Reference ASP (was %s) should be <= to"
-                                                                  " Alternate ASP (was %s)")%(arguments["maxrefasp"], 
-                                                                                              arguments["minaltasp"])
-        
-        if len(arguments["outFile"].split("/")[-1]) > 100:
-            raise ValueError("Name of the outfile must not exceed 100 characters")
-        
-        print(("Running Varif %s"
-              " with options \n%s")%(__version__, 
-                                                    "\n".join(" : ".join([opt, str(Config.options[opt])]) for opt in Config.options)))
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId, stripMutation = False):
         """
@@ -264,7 +196,7 @@ class Connection(object):
         baseHeader = [
                 "Chromosome", "Position", "Type",
                 "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
-                "Annotation","Proportions"]
+                "Annotation","Frequencies"]
         csvline = csvsep.join(baseHeader+self.samples)+"\n"
 
         vcfline = "".join(self.vcf.vcffile[0:self.vcf.headerlinenumber])
@@ -331,7 +263,6 @@ class Connection(object):
         return (list) : A list of lines in CSV format and the corresponding VCF content
 
         """
-        self.fixed = True if self.allVariants is True else self.fixed
         sortedKeys = sorted(allvariants.variants, key= lambda x : (x.split(":")[0], int(x.split(":")[1].split(".")[0])))
         vcfcorrespondingline = 0
         printedLine = ""
@@ -354,10 +285,8 @@ class Connection(object):
             self.load_features(allvariants, key)
             #Each alt has its line
             for altIndex, alt in enumerate(allvariants.variants[key]["alts"]):
-                if allvariants.variants[key]["types"][altIndex] == "ambiguous" and self.allVariants is False:
+                if allvariants.variants[key]["types"][altIndex] == "ambiguous":
                     continue #The VAF or RAF are unknown (low depth) or in between the minimum and maximum set
-                elif allvariants.variants[key]["types"][altIndex] == "fixed" and self.fixed is False:
-                    continue #This variant is fixed (all are ref or all are alt)
                 printedLine += self.annotate_variant(allvariants, key, altIndex)
                 self.print_log(allvariants, key)
                 if allvariants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
@@ -381,7 +310,7 @@ class Connection(object):
             print("Variants read in %s seconds"%(round(time.time()- start_time)))
 
         start_time = time.time()
-        allvariants = Variants(self.vcf)
+        allvariants = Variants(self.vcf, Config.options["minSamplesDiff"])
         allvariants.process_variants(self.group1, self.group2)
         if Config.options["verbose"]:
             print("Variants analysed in %s seconds"%(round(time.time()- start_time)))

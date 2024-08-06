@@ -5,7 +5,7 @@ from .config import Config
 class Variant(object):
     """A single line of a VCF file, requiring allele depth for each sample at each allele."""
     
-    def __init__(self, vcfLine, ranks, samples, samplesRanks, group1, group2):
+    def __init__(self, vcfLine, ranks, samples, samplesRanks, group1, group2, diffsamples1, diffsamples2):
         """
         Arguments:
         vcfLine (str) : Raw VCF line
@@ -14,6 +14,8 @@ class Variant(object):
         samplesRanks (list) : Order of samples given in argument
         group1 (list) : Names of samples in first group of the comparison
         group2 (list) : Names of samples in second group of the comparison
+        diffsamples1 (int) : Number of samples with the same allele in the first group (not the same as in second group)
+        diffsamples2 (int) : Number of samples with the same allele in the second group (not the same as in first group)
 
         config (Config) : Existing configuration loaded initially by varif
         chromosome (str) : Name of chromosome
@@ -26,7 +28,7 @@ class Variant(object):
         counts (dict) : Key (sample name), value (AD of each sample for each allele including ref)
         asps (dict) : Key (sample name), value (asp of each sample for each allele including ref)
         props (list) : True var and true ref prct of both groups for each alt
-        types (list) : Type of each alternate allele among differential, fixed and ambiguous
+        types (list) : Type of each alternate allele among differential and ambiguous
         categories (list) : Type of each alternate allele at the given coordinates : 'SNP' or 'INDEL'
         log (list) : Log of the full variant (VCF line) and of each alt
 
@@ -47,6 +49,8 @@ class Variant(object):
                 break
         self.group1 = group1 if len(group1) > 0 else samples
         self.group2 = group2 if len(group2) > 0 else samples
+        self.diffsamples1 = diffsamples1
+        self.diffsamples2 = diffsamples2
         self.counts = {samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks) if samples[i] in self.group1+self.group2}
         self.asps = {}
         self.props = []
@@ -75,9 +79,9 @@ class Variant(object):
                 self.asps[sample] = [round(ad/sum(self.counts[sample]), 6) for ad in self.counts[sample]]
         return self.asps
 
-    def app_from_asps(self):
+    def apf_from_asps(self):
         """
-        Get the mutated and reference Allele Population Proportions using Allele Sample Proportions
+        Get the mutated and reference Allele Population Frequencies using Allele Sample Proportions
 
         """
         assert self.asps != {}
@@ -85,7 +89,8 @@ class Variant(object):
         minaltasp = self.config.options["minaltasp"]
         #Value above which an asp is not considered a True reference
         maxrefasp = self.config.options["maxrefasp"]
-
+        #Minimal difference of allele population frequency between groups
+        minapfdiff = self.config.options["minApfDiff"]
         #Maximal proportion of missing or mixed asp in both groups
         maxmissing = self.config.options["maxMissing"]
         #Minimal and maximal population MAFs
@@ -94,25 +99,10 @@ class Variant(object):
         minmaf2groups = self.config.options["minMaf2"]
         maxmaf2groups = self.config.options["maxMaf2"]
         assert minmaf2groups <= minmaf1group <= maxmaf1group <= maxmaf2groups
-        #Maximal ratio of min(# of mutated samples)/max(# of mutated samples) (differential groups only)
-        ratiomutationdiff = self.config.options["maxSimilarity"]
         
         for rank in range(1,len(self.alts)+1):
             aspGroup1Rank = [self.asps[sample][rank] for sample in self.group1]
             aspGroup2Rank = [self.asps[sample][rank] for sample in self.group2]
-            #No sample is above depth
-            if all(np.isnan(asp) for asp in aspGroup1Rank):
-                ming1asp = math.nan
-                maxg1asp = math.nan
-            else:
-                ming1asp = np.nanmin(aspGroup1Rank)
-                maxg1asp = np.nanmax(aspGroup1Rank)
-            if all(np.isnan(asp) for asp in aspGroup2Rank):
-                ming2asp = math.nan
-                maxg2asp = math.nan
-            else:
-                ming2asp = np.nanmin(aspGroup2Rank)
-                maxg2asp = np.nanmax(aspGroup2Rank)
             
             leng1supp = len([supptominaltasp for supptominaltasp in aspGroup1Rank if supptominaltasp >= minaltasp])
             leng1infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup1Rank if infetomaxrefasp <= maxrefasp])
@@ -130,20 +120,22 @@ class Variant(object):
 
             missingg1 = 1 - propg1infe - propg1supp
             missingg2 = 1 - propg2infe - propg2supp
-            #fixed mutation or reference
-            if ming1asp >= minaltasp and ming2asp >= minaltasp or (maxg1asp <= maxrefasp and maxg2asp <= maxrefasp):
-                if max(missingg1, missingg2) <= maxmissing and minmaf2groups == 0:
-                    self.types.append("fixed")
-                else:
-                    self.types.append("ambiguous")
-            #True mutational difference between groups
-            elif ming1asp <= maxrefasp and maxg2asp >= minaltasp or (ming2asp <= maxrefasp and maxg1asp >= minaltasp):
-                propmutationdiff = min(propg1supp,propg2supp) / max(propg1supp,propg2supp)
-                mafcondition = maxmaf2groups >= np.nanmax([g1maf,g2maf]) >= minmaf1group and minmaf2groups <= np.nanmin([g1maf,g2maf]) <= maxmaf1group
-                if max(missingg1, missingg2) <= maxmissing and mafcondition and propmutationdiff <= ratiomutationdiff:
-                    self.types.append("differential")
-                else:
-                    self.types.append("ambiguous")
-            #Ambiguous alternate alleles
+            apfdiffinfe = abs(propg1infe - propg2infe)
+            apfdiffsupp = abs(propg1supp - propg2supp)
+            
+            #Limit to number of samples in each group if 'diffsamples' too high
+            #Minimal number of samples with a distinct allele in each group
+            diffsamplecondition = leng1supp >= self.diffsamples1 and leng2infe >= self.diffsamples2 or leng1infe >= self.diffsamples1 and leng2supp >= self.diffsamples2
+            apfcondition = apfdiffinfe >= minapfdiff or apfdiffsupp >= minapfdiff
+            if np.isnan(g1maf) and np.isnan(g2maf):
+                mafcondition = math.nan
             else:
+                maxmafcondition = maxmaf2groups >= np.nanmax([g1maf,g2maf]) >= minmaf1group
+                minmafcondition = minmaf2groups <= np.nanmin([g1maf,g2maf]) <= maxmaf1group
+                mafcondition = maxmafcondition and minmafcondition
+            
+            if diffsamplecondition and apfcondition and max(missingg1, missingg2) <= maxmissing and mafcondition:
+                self.types.append("differential")
+            else:#Ambiguous alternate alleles
                 self.types.append("ambiguous")
+            
