@@ -63,6 +63,7 @@ class Connection(object):
         self.outFile = Config.options["outFile"]
         self.outputVcf = Config.options["outputVcf"]
         self.get_all_groups()
+        print("Varif run was completed in %s seconds"%(round(time.time() - start_time)))
         
     def print_log(self, allvariants, variantId):
         """
@@ -176,9 +177,13 @@ class Connection(object):
         variantId (str) : Unique identifier of the variant
 
         """
+        ref = allvariants.variants[variantId]["ref"]
         for alt in allvariants.variants[variantId]["alts"]:
-            if len(allvariants.variants[variantId]["ref"]) == len(alt):
-                maincategory = "SNP"
+            if len(ref) == len(alt):
+                if ref[0] != alt[0] and ref[1:] == alt[1:]:
+                    maincategory = "SNP"
+                else:
+                    raise ValueError("VCF SNP is not formatted properly, unexpected REF (%s) and ALT (%s)")
             else:
                 maincategory = "INDEL"
             subcategories = sorted(set([self.annotations.annotations[gffId]['annotation'] for gffId in allvariants.variants[variantId]["features"]]))
@@ -194,9 +199,11 @@ class Connection(object):
 
         """
         baseHeader = [
-                "Chromosome", "Position", "Type",
-                "Ref", "Alt", "CDSref", "CDSalt", "AAref", "AAalt",
-                "Annotation","Frequencies"]
+                "Chromosome", "Position", "Type", "Ref", "Alt", 
+                "CDS_ref", "CDS_alt", "AA_ref", "AA_alt", "Annotation", 
+                "Missingness_G1", "Missingness_G2",
+                "Heterozygous_G1", "Heterozygous_G2",
+                "Alt_frequency_G1", "Alt_frequency_G2"]
         csvline = csvsep.join(baseHeader+self.samples)+"\n"
 
         vcfline = "".join(self.vcf.vcffile[0:self.vcf.headerlinenumber])
@@ -220,12 +227,19 @@ class Connection(object):
         leftwindow = allvariants.variants[variantId]["refwindow"][0]+"|" if windowLenSum > 0 else ""
         rightwindow = "|"+allvariants.variants[variantId]["refwindow"][1] if windowLenSum > 0 else ""
         content = [
-            allvariants.variants[variantId]["chromosome"], str(allvariants.variants[variantId]["position"]), 
-            allvariants.variants[variantId]["categories"][altIndex],
-            leftwindow+allvariants.variants[variantId]["ref"]+rightwindow, 
-            allvariants.variants[variantId]["alts"][altIndex],
-            "NA", "NA", "NA","NA", "NA",
-            ":".join(f'{props:03}' for props in allvariants.variants[variantId]["props"][altIndex])]
+            allvariants.variants[variantId]["chromosome"],                              #0                     
+            str(allvariants.variants[variantId]["position"]),                           #1
+            allvariants.variants[variantId]["categories"][altIndex],                    #2
+            leftwindow+allvariants.variants[variantId]["ref"]+rightwindow,              #3
+            allvariants.variants[variantId]["alts"][altIndex],                          #4
+            "NA", "NA", "NA","NA", "NA",                                                #5-9
+            '{:.6f}'.format(allvariants.variants[variantId]["miss"][altIndex][0]),      #10
+            '{:.6f}'.format(allvariants.variants[variantId]["miss"][altIndex][1]),      #11
+            '{:.6f}'.format(allvariants.variants[variantId]["heteroz"][altIndex][0]),   #12
+            '{:.6f}'.format(allvariants.variants[variantId]["heteroz"][altIndex][1]),   #13
+            '{:.6f}'.format(allvariants.variants[variantId]["props"][altIndex][0]),     #14
+            '{:.6f}'.format(allvariants.variants[variantId]["props"][altIndex][2])      #15
+            ]
         content += ["NA"]*len(allvariants.samples)
 
         aaposref = []
@@ -250,7 +264,7 @@ class Connection(object):
         annotations = set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
         content[9] = ":".join(annotations) if annotations != set() else content[9] #potentially different annotations
         for i, sample in enumerate(allvariants.samples):#asps
-            content[11+i] = '{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
+            content[16+i] = '{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
         line = sep.join(content)+"\n"
         return line
 
@@ -306,21 +320,18 @@ class Connection(object):
         start_time = time.time()
         self.vcf = Vcfdata(chunknumber)
         self.vcf.read_vcf()
-        if Config.options["verbose"]:
-            print("Variants read in %s seconds"%(round(time.time()- start_time)))
+        log = "Variants read in %s seconds"%(round(time.time()- start_time))
 
         start_time = time.time()
         allvariants = Variants(self.vcf, Config.options["minSamplesDiff"])
         allvariants.process_variants(self.group1, self.group2)
-        if Config.options["verbose"]:
-            print("Variants analysed in %s seconds"%(round(time.time()- start_time)))
+        log += "\nVariants analysed in %s seconds"%(round(time.time()- start_time))
 
         start_time = time.time()
         variantAnnot = self.annotate_variants(allvariants)
-        if Config.options["verbose"]:
-            print("Variant annotations added in %s seconds"%(round(time.time() - start_time)))
+        log += "\nVariant annotations added in %s seconds"%(round(time.time() - start_time))
 
-        return [allvariants.samples, variantAnnot]
+        return [allvariants.samples, variantAnnot, log]
 
 
     def get_variants(self, outFileName):
@@ -350,8 +361,7 @@ class Connection(object):
         filteredvcf = outFileName+".vcf" if self.outputVcf else None
         
         headerprinted = False
-        max_chunk_set = min(self.chunks, max(Config.options["ncores"], Config.options["nchunks"]))
-        
+        max_chunk_set = min(self.chunks, Config.options["ncores"])
         chunk_set = 0
         while chunk_set < self.chunks:
             incr = max_chunk_set if chunk_set + max_chunk_set <= self.chunks else self.chunks - chunk_set
@@ -359,6 +369,9 @@ class Connection(object):
             
             pool = Pool(Config.options["ncores"])
             results = pool.map(self.get_variants_by_chunk, range(chunk_set-incr+1,chunk_set+1))
+            if Config.options["verbose"]:
+                print("Multiprocessing of chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
+                print("\n".join(res[2] for res in results))
             self.samples = results[0][0]
             if not headerprinted:
                 csvout, vcfout = self.print_header()
@@ -403,7 +416,7 @@ class Connection(object):
                 for other_family_id in range(family_id+1, len(families)):
                     family2 = families[other_family_id]
                     self.group2 = self.families.families[family2]
-                    print("Group comparison of families %s (id : %i) and %s (id: %i)"%(family1, family_id, family2, other_family_id))
+                    print("Group comparison of families %s (id : %i) and %s (id : %i)"%(family1, family_id, family2, other_family_id))
                     outFileInfo = self.outFile + "-"+family1+"_with_"+family2 if not long_names else self.outFile + "-"+str(family_id)+"_with_"+str(other_family_id)
                     self.get_variants(outFileInfo)
         

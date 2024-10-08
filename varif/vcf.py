@@ -168,14 +168,14 @@ class Vcfdata(Vcf):
     
     def read_vcf(self):
         """Reads variants from a VCF file"""
-        firstline = self.interval[0]
+        firstline = max(self.headerlinenumber, self.interval[0])
         lastline = self.interval[1]
         self.vcffile = []
         currentline = 0
         with open(self.vcfpath, 'r') as f:
             while currentline < lastline:
                 currentline += 1
-                if currentline > max(self.headerlinenumber, firstline):
+                if currentline > firstline:
                     self.vcffile.append(f.readline())
                 else:
                     f.readline()

@@ -1,4 +1,5 @@
 import argparse
+import os
 
 class Config(object):
     """All variants found from a VCF file.
@@ -29,15 +30,6 @@ class Config(object):
         
         if Config.options["ncores"] < 1:
             raise ValueError("%s must be at least 1, not %s"%(Config.long_options["ncores"], Config.options["ncores"]))
-        if Config.options["nchunks"] < Config.options["ncores"]:
-            if Config.options["nchunks"] < 1:
-                raise ValueError("%s must be at least 1, not %s"%(Config.long_options["nchunks"], Config.options["nchunks"]))
-            else:
-                print("Reassigning %s from %s to %s to match %s"%(Config.long_options["nchunks"], 
-                                                                  Config.options["nchunks"], 
-                                                                  Config.options["ncores"],
-                                                                  Config.long_options["ncores"]))
-                Config.options["nchunks"] = Config.options["ncores"]
         if Config.options["chunksize"] < 100:
             raise ValueError("%s must be at least 100, not %s"%(Config.long_options["chunksize"], Config.options["chunksize"]))
     
@@ -69,7 +61,7 @@ class Config(object):
         for arg in ["minaltasp", "maxrefasp", "maxMissing", "minApfDiff"]:
             if not 0 <= Config.options[arg] <= 1:
                 raise ValueError("%s must be a proportion, was %s"%(Config.long_options[arg], Config.options[arg]))
-        assert Config.options["maxrefasp"] <= Config.options["minaltasp"], ("%s (was %s) should be <= to"
+        assert Config.options["maxrefasp"] < Config.options["minaltasp"], ("%s (was %s) should be <= to"
                                                                   " %s (was %s)")%(Config.long_options["maxrefasp"],
                                                                                    Config.options["maxrefasp"],
                                                                                    Config.long_options["minaltasp"],
@@ -77,6 +69,9 @@ class Config(object):
         
         if len(Config.options["outFile"].split("/")[-1]) > 100:
             raise ValueError("%s must not exceed 100 characters"%(Config.long_options["outFile"]))
+        
+        if not os.path.isdir(os.path.dirname(Config.options["outFile"])):
+            raise FileNotFoundError("Directory '%s' does not exist"%(Config.options["outFile"]))
 
     @staticmethod
     def set_options():
@@ -105,12 +100,9 @@ class Config(object):
         parser.add_argument('--ncores', dest = 'ncores', type = int, default = 1,
                             metavar = "INT",
                             help = 'Number of parallel jobs to run')
-        parser.add_argument('--chunk-size', dest = 'chunksize', type = int, default = 5000,
+        parser.add_argument('--chunk-size', dest = 'chunksize', type = int, default = 50000,
                             metavar = "INT",
                             help = 'Maximal number of variants to be processed in each chunk')
-        parser.add_argument('--nchunks', dest = 'nchunks', type = int, default = 1,
-                            metavar = "INT",
-                            help = 'Number of chunks to process in a single batch')
 
         parser.add_argument('--ped', type = str, default = None,
                             metavar = "FILE",
@@ -145,9 +137,12 @@ class Config(object):
         parser.add_argument('--exclude-intergenic', dest = 'intergenicRegions', action = 'store_false',
                             default = True,
                             help = 'Keep only variants from gene-annotated regions')
+        parser.add_argument('--max-heterozygous', dest = 'maxHeteroz', type = float, default = 1,
+                            metavar = "FLOAT",
+                            help = 'Maximal proportion of heterozygous loci in each group')
         parser.add_argument('--max-missing', dest = 'maxMissing', type = float, default = 1,
                             metavar = "FLOAT",
-                            help = 'Maximal proportion of missing or heterozygous loci in each group')
+                            help = 'Maximal proportion of missing loci in each group')
         parser.add_argument('--min-apf-diff', dest = 'minApfDiff', type = float, default = 0,
                             metavar = "FLOAT",
                             help = 'Minimal difference in allele population frequency between groups')
@@ -181,12 +176,13 @@ class Config(object):
         Config.options = vars(args)
         Config.long_options = {"vcf": "VCF file", "gff": "GFF file", "fasta": "FASTA file",
                                "outFile": "Output file name", "ncores": "Number of cores",
-                               "chunksize": "Chunk size", "nchunks": "Chunk number",
+                               "chunksize": "Chunk size",
                                "ped": "PED file", "comparison": "Comparison",
                                "nuclWindowBefore": "Nucleotides before", "nuclWindowAfter": "Nucleotides after",
                                "protWindowBefore": "Aminoacids before", "protWindowAfter": "Aminoacids after",
                                "mindepth" : "Minimal depth", "minaltasp" : "Alt ASP", "maxrefasp": "Ref ASP", 
-                               "intergenicRegions": "Intergenic regions", "maxMissing": "Max. ratio of missing samples",
+                               "intergenicRegions": "Intergenic regions", 
+                               "maxHeteroz": "Max. ratio of heterozygous loci", "maxMissing": "Max. ratio of missing loci",
                                "minApfDiff": "Min. diff in APF", "minSamplesDiff": "Min. number of diff. samples",
                                "minMaf1": "Min. MAF (1 group)", "maxMaf1": "Max. MAF (1 group)",
                                "minMaf2": "Min. MAF (2 groups)", "maxMaf2": "Max. MAF (2 groups)",

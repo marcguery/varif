@@ -96,7 +96,8 @@ class Variants(object):
         identifier = variant.chromosome+":"+variant.position+"."+str(vcfline)
         self.variants[identifier] = {
             "chromosome": variant.chromosome, "position": int(variant.position),
-            "props": variant.props, "types": variant.types,
+            "props": variant.props, "miss": variant.miss, "heteroz": variant.heteroz,
+            "types": variant.types,
             "categories": variant.categories,
             "ref": variant.ref, "alts": variant.alts,
             "refwindow": variant.refwindow,

@@ -27,7 +27,9 @@ class Variant(object):
         group2 (list) : Names of samples in second group of the comparison
         counts (dict) : Key (sample name), value (AD of each sample for each allele including ref)
         asps (dict) : Key (sample name), value (asp of each sample for each allele including ref)
-        props (list) : True var and true ref prct of both groups for each alt
+        props (list) : Alt/Ref proportions of groups 1 and 2 for each alt
+        miss (list) : Mssing call proportions for groups 1 and 2 for each alt
+        heteroz (list) : Heterozygous call proportions for groups 1 and 2 for each alt
         types (list) : Type of each alternate allele among differential and ambiguous
         categories (list) : Type of each alternate allele at the given coordinates : 'SNP' or 'INDEL'
         log (list) : Log of the full variant (VCF line) and of each alt
@@ -54,6 +56,8 @@ class Variant(object):
         self.counts = {samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks) if samples[i] in self.group1+self.group2}
         self.asps = {}
         self.props = []
+        self.miss = []
+        self.heteroz = []
         self.types = []
         self.categories = []   
         self.log = ["",[]]
@@ -78,6 +82,38 @@ class Variant(object):
             else:
                 self.asps[sample] = [round(ad/sum(self.counts[sample]), 6) for ad in self.counts[sample]]
         return self.asps
+    
+    def asp_stats(self, asps):
+        """
+        Calculate allele population frequencies and other similar stats about samples
+
+        Args:
+        asps (list) : Alternate allele sample proportions for each sample
+
+        return (list) : Numbers and proportions of samples
+        """
+        
+        
+        #Alternate ASP above which a loci is Alt homozygous
+        minaltasp = self.config.options["minaltasp"]
+        #Alternate ASP below which a loci is non Alt homozygous (assumed to be Ref homozygous)
+        maxrefasp = self.config.options["maxrefasp"]
+            
+        lensupp = len([supptominaltasp for supptominaltasp in asps if supptominaltasp >= minaltasp])
+        leninfe = len([infetomaxrefasp for infetomaxrefasp in asps if infetomaxrefasp <= maxrefasp])
+        avail = lensupp+leninfe if lensupp+leninfe > 0 else math.nan
+            
+        missing = len([asp for asp in asps if np.isnan(asp)])
+        heteroz = len(asps) - missing - avail
+                       
+        propsupp = lensupp/(avail + heteroz)
+        propinfe = leninfe/(avail + heteroz)
+        propmissing = missing/len(asps)
+        propheteroz = heteroz/(avail + heteroz)
+            
+        maf = min(propsupp, propinfe)
+        
+        return [lensupp, leninfe, propsupp, propinfe, propmissing, propheteroz, maf]
 
     def apf_from_asps(self):
         """
@@ -85,48 +121,33 @@ class Variant(object):
 
         """
         assert self.asps != {}
-        #Value below which an asp is not considered a True mutation
-        minaltasp = self.config.options["minaltasp"]
-        #Value above which an asp is not considered a True reference
-        maxrefasp = self.config.options["maxrefasp"]
-        #Minimal difference of allele population frequency between groups
-        minapfdiff = self.config.options["minApfDiff"]
-        #Maximal proportion of missing or mixed asp in both groups
-        maxmissing = self.config.options["maxMissing"]
         #Minimal and maximal population MAFs
         minmaf1group = self.config.options["minMaf1"]
         maxmaf1group = self.config.options["maxMaf1"]
         minmaf2groups = self.config.options["minMaf2"]
         maxmaf2groups = self.config.options["maxMaf2"]
+        #Minimal difference of allele population frequency between groups
+        minapfdiff = self.config.options["minApfDiff"]
+        #Maximal proportion of missing or mixed asp in both groups
+        maxmissing = self.config.options["maxMissing"]
+        maxheteroz = self.config.options["maxHeteroz"]
         assert minmaf2groups <= minmaf1group <= maxmaf1group <= maxmaf2groups
         
         for rank in range(1,len(self.alts)+1):
             aspGroup1Rank = [self.asps[sample][rank] for sample in self.group1]
             aspGroup2Rank = [self.asps[sample][rank] for sample in self.group2]
+            leng1supp, leng1infe, propg1supp, propg1infe, propg1missing, propg1heteroz, g1maf = self.asp_stats(aspGroup1Rank)
+            leng2supp, leng2infe, propg2supp, propg2infe, propg2missing, propg2heteroz, g2maf = self.asp_stats(aspGroup2Rank)
             
-            leng1supp = len([supptominaltasp for supptominaltasp in aspGroup1Rank if supptominaltasp >= minaltasp])
-            leng1infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup1Rank if infetomaxrefasp <= maxrefasp])
-            leng2supp = len([supptominaltasp for supptominaltasp in aspGroup2Rank if supptominaltasp >= minaltasp])
-            leng2infe = len([infetomaxrefasp for infetomaxrefasp in aspGroup2Rank if infetomaxrefasp <= maxrefasp])
-            propg1supp = leng1supp/len(aspGroup1Rank)
-            propg1infe = leng1infe/len(aspGroup1Rank)
-            propg2supp = leng2supp/len(aspGroup2Rank)
-            propg2infe = leng2infe/len(aspGroup2Rank)
-            
-            g1maf = min(leng1supp, leng1infe)/(leng1supp+leng1infe) if leng1supp+leng1infe > 0 else math.nan
-            g2maf = min(leng2supp, leng2infe)/(leng2supp+leng2infe) if leng2supp+leng2infe > 0 else math.nan
-            
-            self.props.append([round(100*propg1supp), round(100*propg1infe), round(100*propg2supp), round(100*propg2infe)])
-
-            missingg1 = 1 - propg1infe - propg1supp
-            missingg2 = 1 - propg2infe - propg2supp
-            apfdiffinfe = abs(propg1infe - propg2infe)
-            apfdiffsupp = abs(propg1supp - propg2supp)
+            self.heteroz.append([propg1heteroz, propg2heteroz])
+            self.props.append([propg1supp, propg1infe, propg2supp, propg2infe])
+            self.miss.append([propg1missing, propg2missing])
             
             #Limit to number of samples in each group if 'diffsamples' too high
             #Minimal number of samples with a distinct allele in each group
             diffsamplecondition = leng1supp >= self.diffsamples1 and leng2infe >= self.diffsamples2 or leng1infe >= self.diffsamples1 and leng2supp >= self.diffsamples2
-            apfcondition = apfdiffinfe >= minapfdiff or apfdiffsupp >= minapfdiff
+            apfcondition = abs(propg1infe - propg2infe) >= minapfdiff or abs(propg1supp - propg2supp) >= minapfdiff
+            
             if np.isnan(g1maf) and np.isnan(g2maf):
                 mafcondition = math.nan
             else:
@@ -134,8 +155,14 @@ class Variant(object):
                 minmafcondition = minmaf2groups <= np.nanmin([g1maf,g2maf]) <= maxmaf1group
                 mafcondition = maxmafcondition and minmafcondition
             
-            if diffsamplecondition and apfcondition and max(missingg1, missingg2) <= maxmissing and mafcondition:
+            if (diffsamplecondition and 
+                apfcondition and 
+                np.nanmax([propg1heteroz, propg2heteroz]) <= maxheteroz and 
+                np.nanmax([propg1missing, propg2missing]) <= maxmissing and 
+                mafcondition):
                 self.types.append("differential")
+            elif propg1missing == 1 and propg2missing == 1:#No locus available at all (maybe some users would like to keep those too?)
+                self.types.append("ambiguous")
             else:#Ambiguous alternate alleles
                 self.types.append("ambiguous")
             
