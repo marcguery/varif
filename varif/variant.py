@@ -145,7 +145,7 @@ class Variant(object):
             
             #Limit to number of samples in each group if 'diffsamples' too high
             #Minimal number of samples with a distinct allele in each group
-            diffsamplecondition = leng1supp >= self.diffsamples1 and leng2infe >= self.diffsamples2 or leng1infe >= self.diffsamples1 and leng2supp >= self.diffsamples2
+            diffsamplecondition = (leng1supp >= self.diffsamples1 and leng2infe >= self.diffsamples2) or (leng1infe >= self.diffsamples1 and leng2supp >= self.diffsamples2)
             apfcondition = abs(propg1infe - propg2infe) >= minapfdiff or abs(propg1supp - propg2supp) >= minapfdiff
             
             if np.isnan(g1maf) and np.isnan(g2maf):

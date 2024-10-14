@@ -401,6 +401,8 @@ class Connection(object):
         compare_selfself = True if self.comparison == "self" else False
 
         if not compare_families and not compare_lineages and not compare_selfself:
+            self.group1 = self.families.samples
+            self.group2 = self.families.samples
             self.get_variants(self.outFile)
         
         if compare_families:

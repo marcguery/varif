@@ -58,6 +58,8 @@ The FASTA file containing one sequence per chromosome.
 
 The optional PED file containing the family membership and parental relationships between samples from the VCF file. This file should be formatted as described in https://zzz.bwh.harvard.edu/plink/data.shtml#ped.
 
+Only samples present in the PED file will be processed.
+
 # Overview
 
 Use `varif` to filter and annotate variants submitted through a VCF file.
