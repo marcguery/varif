@@ -38,7 +38,7 @@ class Connection(object):
         Config.set_options()
         if Config.options["version"]:
             print(__version__)
-            raise SystemExit        
+            raise SystemExit
         Config.check_options()
         print(("Running Varif %s"
               " with options \n%s")%(__version__,
@@ -51,8 +51,7 @@ class Connection(object):
         self.annotations.load_annotations_from_GFF(Config.options["gff"])
         self.fasta = Fasta()
         self.fasta.load_data_from_FASTA(Config.options["fasta"])
-        if Config.options["verbose"]:
-            print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
+        Config.verbose_print("Genome sequences, annotation and sample metadata loaded in %s seconds"%(round(time.time() - start_time)))
 
         self.samples = []
         self.group1 = []
@@ -64,6 +63,8 @@ class Connection(object):
         self.outputVcf = Config.options["outputVcf"]
         self.get_all_groups()
         print("Varif run was completed in %s seconds"%(round(time.time() - start_time)))
+        
+    
         
     def print_log(self, allvariants, variantId):
         """
@@ -347,15 +348,13 @@ class Connection(object):
         self.vcf.count_lines()
         self.chunks = max(math.ceil((self.vcf.totlines-self.vcf.headerlinenumber)/Config.options["chunksize"]), Config.options["ncores"])
         intervals = self.vcf.define_intervals(self.chunks)
-        if Config.options["verbose"]:
-            print("Variant metadata read in %s seconds"%(round(time.time() - start_time)))
+        Config.verbose_print("Variant metadata read in %s seconds"%(round(time.time() - start_time)))
         log = ("Will use %s chunks "
                 "each with %s variants "
                 "for a total of %s processed variants.")%(self.chunks, 
                                                           "/".join((str(interval) for interval in intervals)), 
                                                           self.vcf.totlines-self.vcf.headerlinenumber)
-        if Config.options["verbose"]:
-            print(log)
+        Config.verbose_print(log)
         
         csv = outFileName+".csv"
         filteredvcf = outFileName+".vcf" if self.outputVcf else None
@@ -367,11 +366,10 @@ class Connection(object):
             incr = max_chunk_set if chunk_set + max_chunk_set <= self.chunks else self.chunks - chunk_set
             chunk_set += incr
             
+            Config.verbose_print("Multiprocessing of chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
             pool = Pool(Config.options["ncores"])
             results = pool.map(self.get_variants_by_chunk, range(chunk_set-incr+1,chunk_set+1))
-            if Config.options["verbose"]:
-                print("Multiprocessing of chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
-                print("\n".join(res[2] for res in results))
+            Config.verbose_print("\n".join(res[2] for res in results))
             self.samples = results[0][0]
             if not headerprinted:
                 csvout, vcfout = self.print_header()

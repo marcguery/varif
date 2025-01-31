@@ -32,7 +32,7 @@ class Vcf(object):
         self.vcffile = []
     
     @classmethod
-    def check_vcf_header(self, header):
+    def check_vcf_header(cls, header):
         """
         Check if VCF format is expected and store VCF fields and sample names
 
@@ -40,29 +40,29 @@ class Vcf(object):
         
         """
         try:
-            assert set(self.vcfHeaderExpected).difference(set(header)) == set(), "Bad VCF header"
-            self.vcfHeaderSorted = {colname:i for i,colname in enumerate(self.vcfHeaderExpected)}
+            assert set(cls.vcfHeaderExpected).difference(set(header)) == set(), "Bad VCF header"
+            cls.vcfHeaderSorted = {colname:i for i,colname in enumerate(cls.vcfHeaderExpected)}
             #A very complicated stuff where a simple order to follow would have been enough
-            chromRank = self.vcfHeaderSorted[self.vcfHeaderExpected[0]]
-            posRank = self.vcfHeaderSorted[self.vcfHeaderExpected[1]]
-            idRank = self.vcfHeaderSorted[self.vcfHeaderExpected[2]]
-            refRank = self.vcfHeaderSorted[self.vcfHeaderExpected[3]]
-            altsRank = self.vcfHeaderSorted[self.vcfHeaderExpected[4]]
-            qualRank = self.vcfHeaderSorted[self.vcfHeaderExpected[5]]
-            filterRank = self.vcfHeaderSorted[self.vcfHeaderExpected[6]]
-            infoRank = self.vcfHeaderSorted[self.vcfHeaderExpected[7]]
-            formatRank = self.vcfHeaderSorted[self.vcfHeaderExpected[8]]
-            self.ranks = [
+            chromRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[0]]
+            posRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[1]]
+            idRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[2]]
+            refRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[3]]
+            altsRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[4]]
+            qualRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[5]]
+            filterRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[6]]
+            infoRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[7]]
+            formatRank = cls.vcfHeaderSorted[cls.vcfHeaderExpected[8]]
+            cls.ranks = [
             chromRank, posRank, idRank,
             refRank, altsRank, qualRank,
             filterRank, infoRank, formatRank]
             #Reset vcfHeaderSorted with actual header
-            self.vcfHeaderSorted = {colname.strip("\n"):i for i,colname in enumerate(header)}
+            cls.vcfHeaderSorted = {colname.strip("\n"):i for i,colname in enumerate(header)}
             #Assuming that samples are at the end
             n = len(header)-1
             colname = header[n].rstrip("\n")
-            while colname != self.vcfHeaderExpected[-1] and n >= 0:
-                self.samples.append(colname)
+            while colname != cls.vcfHeaderExpected[-1] and n >= 0:
+                cls.samples.append(colname)
                 n -= 1
                 colname = header[n]
         except Exception as err:
@@ -70,7 +70,7 @@ class Vcf(object):
             raise(err)
     
     @classmethod
-    def _read_vcf_header(self, vcf):
+    def _read_vcf_header(cls, vcf):
         """
         Reads a VCF header and store its location
 
@@ -79,9 +79,9 @@ class Vcf(object):
         return (str) : The lines of the header
 
         """
-        self.vcfpath = vcf
+        cls.vcfpath = vcf
         vcffile = []
-        with open(self.vcfpath, 'r') as f:
+        with open(cls.vcfpath, 'r') as f:
             line = f.readline()
             vcffile.append(line)
             n = 1
@@ -89,10 +89,10 @@ class Vcf(object):
                 line = f.readline()
                 vcffile.append(line)
                 n += 1
-        self.headerlinenumber = n
+        cls.headerlinenumber = n
         headerline = line
         #Check VCF formatting
-        self.check_vcf_header(headerline.split("\t"))
+        cls.check_vcf_header(headerline.split("\t"))
         return vcffile
     
     def read_vcf_header(self, vcf):
@@ -105,12 +105,12 @@ class Vcf(object):
         self.vcffile = self._read_vcf_header(vcf)
     
     @classmethod
-    def count_lines(self):
+    def count_lines(cls):
         """Count the number of lines in a VCF file."""
-        self.totlines = sum(1 for _ in open(self.vcfpath))
+        cls.totlines = sum(1 for _ in open(cls.vcfpath))
     
     @classmethod
-    def define_intervals(self, chunks):
+    def define_intervals(cls, chunks):
         """
         Determine the evenly distributed ranges of lines in the VCF file matching each chunk
 
@@ -119,7 +119,7 @@ class Vcf(object):
         return (list) : The unique sizes of all intervals
 
         """
-        assert (self.totlines-self.headerlinenumber) >= chunks >= 1
+        assert (cls.totlines-cls.headerlinenumber) >= chunks >= 1
         
         #To make the intervals as even as possible, they are formed using the formula:
         # n = i * (x+1) + j * x
@@ -128,15 +128,15 @@ class Vcf(object):
         # x = n//(# of chunks),
         # i and j the numbers of intervals of size x or x+1 so that the sum equals n
         
-        base_interval = (self.totlines - self.headerlinenumber)//chunks #corresponds to 'x'
-        last_interval = self.totlines - self.headerlinenumber - (base_interval * (chunks - 1))
+        base_interval = (cls.totlines - cls.headerlinenumber)//chunks #corresponds to 'x'
+        last_interval = cls.totlines - cls.headerlinenumber - (base_interval * (chunks - 1))
         extra = last_interval - base_interval #remainder is equal to 'i'
-        majorshift = self.headerlinenumber #intervals must consider the VCF header as well
+        majorshift = cls.headerlinenumber #intervals must consider the VCF header as well
 
-        self.intervals = [[majorshift+part*(base_interval+1),majorshift+(part+1)*(base_interval+1)] for part in range(extra)]
-        self.intervals += [[majorshift+extra+part*(base_interval),majorshift+extra+(part+1)*(base_interval)] for part in range(extra,chunks)]
+        cls.intervals = [[majorshift+part*(base_interval+1),majorshift+(part+1)*(base_interval+1)] for part in range(extra)]
+        cls.intervals += [[majorshift+extra+part*(base_interval),majorshift+extra+(part+1)*(base_interval)] for part in range(extra,chunks)]
         
-        uniquechunksizes = [size_inter for size_inter in set([interval[1]-interval[0] for interval in self.intervals])]
+        uniquechunksizes = [size_inter for size_inter in set([interval[1]-interval[0] for interval in cls.intervals])]
         if  min(uniquechunksizes) < 100:
             log = ("Low chunk size of %s detected,"
                     " consider increasing the chunk size upper limit or reducing the number of cores.")%min(uniquechunksizes)

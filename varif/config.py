@@ -10,71 +10,79 @@ class Config(object):
     options = {}
     long_options = {}
     
-    def check_options():
+    @classmethod
+    def verbose_print(cls, *args, **kwargs):
+        if cls.options["verbose"]:
+            print(*args, **kwargs)
+        else:
+            return
+        
+    @classmethod
+    def check_options(cls):
         """
         Verify the integrity of the arguments passed from the command line
 
         """
         
         for arg in ["vcf", "gff", "fasta", "outFile"]:
-            if Config.options[arg] is None:
-                raise NameError("%s is required"%Config.long_options[arg])
+            if cls.options[arg] is None:
+                raise NameError("%s is required"%cls.long_options[arg])
         
-        if Config.options["comparison"] is not None:
+        if cls.options["comparison"] is not None:
             allowed_values = ["families", "lineages", "self", "all"]
-            if Config.options["comparison"] not in allowed_values:
-                raise ValueError("%s can only be one of '%s'"%(Config.long_options["comparison"],"', '".join(allowed_values)))
-            if Config.options["ped"] is None and Config.options["comparison"] != "all":
-                raise NameError("%s is required when comparing groups ('%s' comparison)"%(Config.long_options["ped"],
-                                                                                          Config.options["comparison"]))
+            if cls.options["comparison"] not in allowed_values:
+                raise ValueError("%s can only be one of '%s'"%(cls.long_options["comparison"],"', '".join(allowed_values)))
+            if cls.options["ped"] is None and cls.options["comparison"] != "all":
+                raise NameError("%s is required when comparing groups ('%s' comparison)"%(cls.long_options["ped"],
+                                                                                          cls.options["comparison"]))
         
-        if Config.options["ncores"] < 1:
-            raise ValueError("%s must be at least 1, not %s"%(Config.long_options["ncores"], Config.options["ncores"]))
-        if Config.options["chunksize"] < 100:
-            raise ValueError("%s must be at least 100, not %s"%(Config.long_options["chunksize"], Config.options["chunksize"]))
+        if cls.options["ncores"] < 1:
+            raise ValueError("%s must be at least 1, not %s"%(cls.long_options["ncores"], cls.options["ncores"]))
+        if cls.options["chunksize"] < 100:
+            raise ValueError("%s must be at least 100, not %s"%(cls.long_options["chunksize"], cls.options["chunksize"]))
     
         for arg in ["nuclWindowBefore", "nuclWindowAfter", "protWindowBefore", "protWindowAfter"]:
-            if Config.options[arg] < 0:
-                raise ValueError("%s must be >= 0, not %s"%(Config.long_options[arg], Config.options[arg]))
+            if cls.options[arg] < 0:
+                raise ValueError("%s must be >= 0, not %s"%(cls.long_options[arg], cls.options[arg]))
         
-        if Config.options["minSamplesDiff"] < 0:
-            raise ValueError("%s must be >= 0, not %s"%(Config.long_options["minSamplesDiff"], Config.options["minSamplesDiff"]))
+        if cls.options["minSamplesDiff"] < 0:
+            raise ValueError("%s must be >= 0, not %s"%(cls.long_options["minSamplesDiff"], cls.options["minSamplesDiff"]))
         
         for arg in ["minMaf1", "maxMaf1", "minMaf2", "maxMaf2"]:
-            if not 0 <= Config.options[arg] <= 0.5:
-                raise ValueError("%s shoud be between 0 and 0.5, not %s"%(Config.long_options[arg], Config.options[arg]))
-        if Config.options["minMaf1"] < Config.options["minMaf2"] or Config.options["maxMaf1"] > Config.options["maxMaf2"]:
-            Config.options["minMaf1"] = Config.options["minMaf2"] if Config.options["minMaf1"] < Config.options["minMaf2"] else Config.options["minMaf1"]
-            Config.options["maxMaf1"] = Config.options["maxMaf2"] if Config.options["maxMaf1"] > Config.options["maxMaf2"] else Config.options["maxMaf1"]            
+            if not 0 <= cls.options[arg] <= 0.5:
+                raise ValueError("%s shoud be between 0 and 0.5, not %s"%(cls.long_options[arg], cls.options[arg]))
+        if cls.options["minMaf1"] < cls.options["minMaf2"] or cls.options["maxMaf1"] > cls.options["maxMaf2"]:
+            cls.options["minMaf1"] = cls.options["minMaf2"] if cls.options["minMaf1"] < cls.options["minMaf2"] else cls.options["minMaf1"]
+            cls.options["maxMaf1"] = cls.options["maxMaf2"] if cls.options["maxMaf1"] > cls.options["maxMaf2"] else cls.options["maxMaf1"]            
             print("Reassigned 'minMaf1' and/or 'maxMaf1' to custom values of 'minMaf2' and/or 'maxMaf2'")
-        if not Config.options["minMaf2"] <= Config.options["minMaf1"] <= Config.options["maxMaf1"] <= Config.options["maxMaf2"]:
+        if not cls.options["minMaf2"] <= cls.options["minMaf1"] <= cls.options["maxMaf1"] <= cls.options["maxMaf2"]:
             raise ValueError("MAF cutoffs did not satisfy these conditions:"+
-                             "\n %s (was %s) <= %s (was %s) <= %s (was %s) <= %s (was %s)"%(Config.long_options["minMaf2"],
-                                                                                            Config.options["minMaf2"],
-                                                                                                           Config.long_options["minMaf1"],
-                                                                                                           Config.options["minMaf1"],
-                                                                                                           Config.long_options["maxMaf1"],
-                                                                                                           Config.options["maxMaf1"],
-                                                                                                           Config.long_options["maxMaf2"],
-                                                                                                           Config.options["maxMaf2"]))
+                             "\n %s (was %s) <= %s (was %s) <= %s (was %s) <= %s (was %s)"%(cls.long_options["minMaf2"],
+                                                                                            cls.options["minMaf2"],
+                                                                                                           cls.long_options["minMaf1"],
+                                                                                                           cls.options["minMaf1"],
+                                                                                                           cls.long_options["maxMaf1"],
+                                                                                                           cls.options["maxMaf1"],
+                                                                                                           cls.long_options["maxMaf2"],
+                                                                                                           cls.options["maxMaf2"]))
         
         for arg in ["minaltasp", "maxrefasp", "maxMissing", "minApfDiff"]:
-            if not 0 <= Config.options[arg] <= 1:
-                raise ValueError("%s must be a proportion, was %s"%(Config.long_options[arg], Config.options[arg]))
-        assert Config.options["maxrefasp"] < Config.options["minaltasp"], ("%s (was %s) should be <= to"
-                                                                  " %s (was %s)")%(Config.long_options["maxrefasp"],
-                                                                                   Config.options["maxrefasp"],
-                                                                                   Config.long_options["minaltasp"],
-                                                                                              Config.options["minaltasp"])
+            if not 0 <= cls.options[arg] <= 1:
+                raise ValueError("%s must be a proportion, was %s"%(cls.long_options[arg], cls.options[arg]))
+        assert cls.options["maxrefasp"] < cls.options["minaltasp"], ("%s (was %s) should be <= to"
+                                                                  " %s (was %s)")%(cls.long_options["maxrefasp"],
+                                                                                   cls.options["maxrefasp"],
+                                                                                   cls.long_options["minaltasp"],
+                                                                                              cls.options["minaltasp"])
         
-        if len(Config.options["outFile"].split("/")[-1]) > 100:
-            raise ValueError("%s must not exceed 100 characters"%(Config.long_options["outFile"]))
+        if len(cls.options["outFile"].split("/")[-1]) > 100:
+            raise ValueError("%s must not exceed 100 characters"%(cls.long_options["outFile"]))
         
-        if not os.path.isdir(os.path.dirname(Config.options["outFile"])):
-            raise FileNotFoundError("Directory '%s' does not exist"%(Config.options["outFile"]))
+        if not os.path.isdir(os.path.dirname(cls.options["outFile"])):
+            raise FileNotFoundError("Directory '%s' does not exist"%(cls.options["outFile"]))
 
-    @staticmethod
-    def set_options():
+    @classmethod
+    def set_options(cls):
         parser = argparse.ArgumentParser(description = '''
             Filter and annotate alleles likely to be
             differentially mutated among samples by comparing 
@@ -173,8 +181,8 @@ class Config(object):
                             help = 'Show varif version')
         
         args = parser.parse_args()
-        Config.options = vars(args)
-        Config.long_options = {"vcf": "VCF file", "gff": "GFF file", "fasta": "FASTA file",
+        cls.options = vars(args)
+        cls.long_options = {"vcf": "VCF file", "gff": "GFF file", "fasta": "FASTA file",
                                "outFile": "Output file name", "ncores": "Number of cores",
                                "chunksize": "Chunk size",
                                "ped": "PED file", "comparison": "Comparison",
