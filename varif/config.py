@@ -108,7 +108,7 @@ class Config(object):
         parser.add_argument('--ncores', dest = 'ncores', type = int, default = 1,
                             metavar = "INT",
                             help = 'Number of parallel jobs to run')
-        parser.add_argument('--chunk-size', dest = 'chunksize', type = int, default = 50000,
+        parser.add_argument('--chunk-size', dest = 'chunksize', type = int, default = 1000,
                             metavar = "INT",
                             help = 'Maximal number of variants to be processed in each chunk')
 
@@ -154,7 +154,7 @@ class Config(object):
         parser.add_argument('--min-apf-diff', dest = 'minApfDiff', type = float, default = 0,
                             metavar = "FLOAT",
                             help = 'Minimal difference in allele population frequency between groups')
-        parser.add_argument('--min-samples-diff', dest = 'minSamplesDiff', type = int, default = 1,
+        parser.add_argument('--min-samples-diff', dest = 'minSamplesDiff', type = int, default = 0,
                             metavar = "INT",
                             help = 'Minimal difference in the number of samples with a distinct allele between groups')
         

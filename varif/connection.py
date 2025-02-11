@@ -1,6 +1,6 @@
 from sys import stderr
 from .config import Config
-from .vcf import Vcf, Vcfdata
+from .vcf import Vcf, Vcfchunk
 from .variants import Variants
 from .families import Families
 from .annotations import Annotations
@@ -207,7 +207,7 @@ class Connection(object):
                 "Alt_frequency_G1", "Alt_frequency_G2"]
         csvline = csvsep.join(baseHeader+self.samples)+"\n"
 
-        vcfline = "".join(self.vcf.vcffile[0:self.vcf.headerlinenumber])
+        vcfline = "".join(self.vcf.vcfheader)
         return [csvline, vcfline]
     
     def annotate_variant(self, allvariants, variantId = None, altIndex = 0, sep = ";"):
@@ -306,7 +306,7 @@ class Connection(object):
                 self.print_log(allvariants, key)
                 if allvariants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
                     vcfcorrespondingline = allvariants.variants[key]["vcfline"]
-                    filteredvcfcontent += allvariants.vcf.vcffile[vcfcorrespondingline-1]
+                    filteredvcfcontent += allvariants.vcf.vcfchunk[vcfcorrespondingline-1]
         return [printedLine, filteredvcfcontent]
     
     def get_variants_by_chunk(self, chunknumber):
@@ -319,12 +319,12 @@ class Connection(object):
 
         """
         start_time = time.time()
-        self.vcf = Vcfdata(chunknumber)
-        self.vcf.read_vcf()
+        vcfchunk = Vcfchunk(chunknumber)
+        vcfchunk.read_vcf()
         log = "Variants read in %s seconds"%(round(time.time()- start_time))
 
         start_time = time.time()
-        allvariants = Variants(self.vcf, Config.options["minSamplesDiff"])
+        allvariants = Variants(vcfchunk, Config.options["minSamplesDiff"])
         allvariants.process_variants(self.group1, self.group2)
         log += "\nVariants analysed in %s seconds"%(round(time.time()- start_time))
 
@@ -343,7 +343,7 @@ class Connection(object):
 
         """
         start_time = time.time()
-        self.vcf = Vcf()
+        self.vcf = Vcf
         self.vcf.read_vcf_header(Config.options["vcf"])
         self.vcf.count_lines()
         self.chunks = max(math.ceil((self.vcf.totlines-self.vcf.headerlinenumber)/Config.options["chunksize"]), Config.options["ncores"])
@@ -366,7 +366,7 @@ class Connection(object):
             incr = max_chunk_set if chunk_set + max_chunk_set <= self.chunks else self.chunks - chunk_set
             chunk_set += incr
             
-            Config.verbose_print("Multiprocessing of chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
+            Config.verbose_print("Processing chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
             pool = Pool(Config.options["ncores"])
             results = pool.map(self.get_variants_by_chunk, range(chunk_set-incr+1,chunk_set+1))
             Config.verbose_print("\n".join(res[2] for res in results))

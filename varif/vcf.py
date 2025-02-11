@@ -5,6 +5,7 @@ class Vcf(object):
     """Store data loaded from a VCF file"""
 
     vcfpath = ""
+    vcfheader = []
     vcfHeaderExpected = [
             "#CHROM", "POS", "ID",
             "REF", "ALT", "QUAL", "FILTER",
@@ -18,15 +19,16 @@ class Vcf(object):
 
     def __init__(self):
         """
-        vcfpath (str) : Path to the VCf file
+        vcfpath (str) : Path to the VCF file
+        vcfheader (list) : List of lines in the VCF herader (up tp "#CHROM")
         vcfHeaderExpected (list) : Order expected of the fields in the VCF
         vcfHeaderSorted (dict) : Key (Name of field), value (order of field)
         headerlinenumber : The line number of the VCF file corresponding to the end of the header
-        totlines : The total number of lines in the VCf file
+        totlines : The total number of lines in the VCF file
         intervals (list) : Ranges of VCF lines to use for each chunk
         ranks (list) : Rank of each field in VCF
         samples (list) : Names of samples
-        vcffile (list) : The list of lines in the input VCF file
+        vcffile (list) : List of lines after the header (after "#CHROM") in the VCF
 
         """
         self.vcffile = []
@@ -36,7 +38,7 @@ class Vcf(object):
         """
         Check if VCF format is expected and store VCF fields and sample names
 
-        header (list) : Name of fields in the actual VCF
+        header (list) : Fields of the VCF
         
         """
         try:
@@ -70,39 +72,28 @@ class Vcf(object):
             raise(err)
     
     @classmethod
-    def _read_vcf_header(cls, vcf):
+    def read_vcf_header(cls, vcf):
         """
         Reads a VCF header and store its location
 
         vcf (str) : File path of VCF file
 
-        return (str) : The lines of the header
-
         """
         cls.vcfpath = vcf
-        vcffile = []
+        cls.vcfheader = []
         with open(cls.vcfpath, 'r') as f:
+            n = 0
             line = f.readline()
-            vcffile.append(line)
-            n = 1
             while line.startswith('##'):
-                line = f.readline()
-                vcffile.append(line)
                 n += 1
+                cls.vcfheader.append(line)
+                line = f.readline()
+            if line.startswith(cls.vcfHeaderExpected[0]):
+                n += 1
+                cls.vcfheader.append(line)
         cls.headerlinenumber = n
-        headerline = line
         #Check VCF formatting
-        cls.check_vcf_header(headerline.split("\t"))
-        return vcffile
-    
-    def read_vcf_header(self, vcf):
-        """
-        Save a VCF header
-
-        vcf (str) : File path of VCF file
-
-        """
-        self.vcffile = self._read_vcf_header(vcf)
+        cls.check_vcf_header(cls.vcfheader[-1].split("\t"))
     
     @classmethod
     def count_lines(cls):
@@ -143,39 +134,51 @@ class Vcf(object):
             print(log)
         
         return uniquechunksizes
+    
+    def read_vcf(self):
+        """Reads the whole VCF file without the header"""
+        if len(self.vcfheader) == 0:
+            raise Exception("You should read the VCF header first.")
+        self.vcffile = []
+        currentline = 0
+        with open(self.vcfpath, 'r') as f:
+            for line in f:
+                currentline += 1
+                if currentline > self.headerlinenumber:
+                    self.vcffile.append(line)
+            
 
-
-class Vcfdata(Vcf):
-    """Store variant data loaded from a VCF file"""
+class Vcfchunk(Vcf):
+    """Store variant chunks from a VCF file"""
 
     def __init__(self, chunknumber = 1):
         """
-        vcffile (list) : The content of the VCF file
         chunknumber (int) : The rank of the chunk of variants to use
-        interval (list) : The line numbers where the variants are located
+        vcfchunk (list) : The list of lines in the VCF chunk
+        interval (list) : The numbers of the first and last lines where the variants are located
 
         """
         #The VCF file has to be read several times, it should not be spawned by a subprocess
         if not os.path.isfile(self.vcfpath):
             raise FileNotFoundError("VCF file '%s' should be a regular file."%self.vcfpath)
         
-        self.vcffile = []
         self.chunknumber = chunknumber
+        self.vcfchunk = []
     
     @property
     def interval(self):
         return [self.intervals[self.chunknumber-1][0],self.intervals[self.chunknumber-1][1]]
     
     def read_vcf(self):
-        """Reads variants from a VCF file"""
+        """Reads variants from a chunk of a VCF file"""
         firstline = max(self.headerlinenumber, self.interval[0])
         lastline = self.interval[1]
-        self.vcffile = []
+        self.vcfchunk = []
         currentline = 0
         with open(self.vcfpath, 'r') as f:
             while currentline < lastline:
                 currentline += 1
                 if currentline > firstline:
-                    self.vcffile.append(f.readline())
+                    self.vcfchunk.append(f.readline())
                 else:
                     f.readline()

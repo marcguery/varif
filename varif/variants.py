@@ -83,7 +83,7 @@ class Variants(object):
         vcfline (int) : Variants from this line number of the VCF will be processed
 
         """
-        variant = Variant(self.vcf.vcffile[vcfline-1], self.vcf.ranks,
+        variant = Variant(self.vcf.vcfchunk[vcfline-1], self.vcf.ranks,
                           self.vcf.samples, [self.vcf.vcfHeaderSorted[sample]
                         for sample in self.vcf.samples], 
                           self.group1, self.group2, self.diffsamples1, self.diffsamples2)
@@ -124,6 +124,6 @@ class Variants(object):
         self.diffsamples1, self.diffsamples2 = self.check_diffsamples()
         
         n = 1
-        while n <= len(self.vcf.vcffile):
+        while n <= len(self.vcf.vcfchunk):
             self.process_vcf_variant(n)
             n += 1

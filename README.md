@@ -170,7 +170,7 @@ The ASPs are calculated only if the sample read depth (the sum of all the reads 
 
 ## Allele population frequencies
 
-The options `--min-apf-diff` (default 0) and `--min-samples-diff` (default 1) compare the prevalence of homozygous alleles (determined for each sample from ASPs) between the groups defined by the PED file.
+The options `--min-apf-diff` (default 0) and `--min-samples-diff` (default 0) compare the prevalence of homozygous alleles (determined for each sample from ASPs) between the groups defined by the PED file.
 
 The option `--min-apf-diff` corresponds to the minimal difference in (either alternate or reference) allele frequencies between groups to keep a variant. Allele frequency is calculated with the formula:
 
@@ -195,7 +195,7 @@ A variant is kept if all these conditions are met:
 - The MAFs of both groups are above `--min-maf2` (default 0)
 - The MAF of one of the groups is above `--min-maf1` (default 0)
 - The MAF of one of the groups is below `--max-maf1` (default 0.5)
-- The MAF of both groups are below `--max-maf2` (default 0.5)
+- The MAFs of both groups are below `--max-maf2` (default 0.5)
 
 Cutoffs of MAF should be set as follow: `--min-maf2` &le; `--min-maf1` &le; `--max-maf1` &le; `--max-maf2`.
 
@@ -229,7 +229,7 @@ Amino acids affected by the reference and alternate sequence are obtained by tra
 
 ## Multiprocessing and memory
 
-The most time consuming step of the pipeline is when the ASPs are calculated. Variants are processed by chunk whose number is determined from an upper limit on the number of variants processed by chunk set by `--chunk-size` (50000 variants by chunk by default). The number of variants by chunk can be reduced (down to 100) to save up on memory, although this will increase the running time. Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The size of chunks may be reduced so that the total number of chunks match the number of cores.
+The most time consuming step of the pipeline is when the ASPs are calculated. Variants are processed by chunk whose number is determined from an upper limit on the number of variants processed by chunk set by `--chunk-size` (1000 variants by chunk by default). The number of variants by chunk can be reduced (down to 100) to save up on memory, although this will increase the running time. Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The size of chunks may be reduced so that the total number of chunks match the number of cores.
 
 # Limitations
 
