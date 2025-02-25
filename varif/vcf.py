@@ -1,4 +1,4 @@
-from sys import stderr
+from .config import Config
 import os
 
 class Vcf(object):
@@ -68,7 +68,7 @@ class Vcf(object):
                 n -= 1
                 colname = header[n]
         except Exception as err:
-            print(err, file = stderr)
+            Config.error_print(err)
             raise(err)
     
     @classmethod

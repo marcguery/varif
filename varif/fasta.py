@@ -1,4 +1,4 @@
-from sys import stderr
+from .config import Config
 
 class Fasta(object):
     """Handle FASTA files and basic operations on bases."""
@@ -254,7 +254,7 @@ class Fasta(object):
         posBefore = position - windowBefore
         posAfter = position + windowAfter
         if posBefore < 1 or posAfter + seqLength > len(self.data[chromosome]):
-            print("DNA window too wide at position (%s:%s). Changing to maximal window..."%(chromosome, position), file = stderr)
+            Config.error_print("DNA window too wide at position (%s:%s). Changing to maximal window..."%(chromosome, position))
             posBefore = 1 if posBefore < 1 else posBefore
             posAfter = -2 - seqLength if posAfter + seqLength > len(self.data[chromosome]) else posAfter
         return [self.data[chromosome][posBefore-1:position-1],self.data[chromosome][position+seqLength-1:posAfter+seqLength-1]]

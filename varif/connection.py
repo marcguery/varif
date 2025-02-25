@@ -1,4 +1,3 @@
-from sys import stderr
 from .config import Config
 from .vcf import Vcf, Vcfchunk
 from .variants import Variants
@@ -83,7 +82,7 @@ class Connection(object):
         if "".join(varlogs) != "": 
             pass
         if log != "":
-            print(log, file = stderr)
+            Config.error_print(log)
     
     def get_aa_from_mutation(self, chromosome, position, reference, mutation, gffId, stripMutation = False):
         """
@@ -105,7 +104,7 @@ class Connection(object):
         windowAfter = 2+Config.options["protWindowAfter"]*3
 
         if len(self.annotations.annotations[gffId]["parents"]) > 1:
-            print("Ambiguous origin of CDS %s: one of %s. Taking the first one (%s) by default"%(gffId, ", ".join(self.annotations.annotations[gffId]["parents"]), self.annotations.annotations[gffId]["parents"][0]), file = stderr)
+            Config.error_print("Ambiguous origin of CDS %s: one of %s. Taking the first one (%s) by default"%(gffId, ", ".join(self.annotations.annotations[gffId]["parents"]), self.annotations.annotations[gffId]["parents"][0]))
         allCDSsorted, cdsCoords = self.annotations.get_CDS_from_same_parent(gffId)
         intronCoords = self.fasta.get_introns_coords(cdsCoords)
         genesequence = self.fasta.merge_CDS(chromosome, cdsCoords)
@@ -407,7 +406,7 @@ class Connection(object):
             families = list(self.families.families.keys())
             long_names = True if max([len(samplename) for samplename in families]) > 30 else False
             if long_names:
-                print("Sample names exceed the limit of 30 characters, will use index instead for file names", file = stderr)
+                Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
             assert len(families) > 1, "Not enough families to make a group comparison"
 
             for family_id in range(0,len(families)-1):
@@ -424,7 +423,7 @@ class Connection(object):
             parents = list(self.families.parents.keys())
             long_names = True if max([len(samplename) for samplename in parents]) > 30 else False
             if long_names:
-                print("Sample names exceed the limit of 30 characters, will use index instead for file names", file = stderr)
+                Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
             assert len(parents) >= 1, "Not enough parents-offsprings to make a group comparison"
 
             for index,mates in enumerate(parents):
@@ -447,7 +446,7 @@ class Connection(object):
             families = list(self.families.families.keys())
             long_names = True if max([len(samplename) for samplename in families]) > 30 else False
             if long_names:
-                print("Sample names exceed the limit of 30 characters, will use index instead for file names", file = stderr)
+                Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
             assert len(families) > 0, "There are no families in the PED file"
 
             for family_id in range(0,len(families)):

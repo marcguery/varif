@@ -1,4 +1,5 @@
 import argparse
+from sys import stderr
 import os
 
 class Config(object):
@@ -10,8 +11,15 @@ class Config(object):
     options = {}
     long_options = {}
     
+    @staticmethod
+    def error_print(*args, **kwargs):
+        """Prints to STDERR"""
+        print(*args, **kwargs, file = stderr)
+        return
+    
     @classmethod
     def verbose_print(cls, *args, **kwargs):
+        """Prints to STDOUT only of the 'verbose' option was used"""
         if cls.options["verbose"]:
             print(*args, **kwargs)
         else:

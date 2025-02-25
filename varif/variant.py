@@ -53,7 +53,18 @@ class Variant(object):
         self.group2 = group2 if len(group2) > 0 else samples
         self.diffsamples1 = diffsamples1
         self.diffsamples2 = diffsamples2
-        self.counts = {samples[i]:[int(ad) for ad in vcfLine[n].split(":")[adRank].strip("\n").split(",")] for i,n in enumerate(samplesRanks) if samples[i] in self.group1+self.group2}
+        self.counts = {}
+        #AD has to be int to be considered, float not permitted (float would be set to 0)
+        for i,n in enumerate(samplesRanks):
+            if samples[i] in self.group1+self.group2:
+                adsplit = vcfLine[n].split(":")[adRank].strip("\n").split(",")
+                self.counts[samples[i]] = [int(ad) if ad.isdigit() else 0 for ad in adsplit]
+                if len(self.counts[samples[i]]) < len(self.alts) + 1:
+                    Config.error_print("Expected %s AD counts, only got %s. AD field was: '%s'. Set all AD counts to 0."%
+                                       (len(self.alts) + 1, 
+                                        len(self.counts[samples[i]]),
+                                        vcfLine[n].split(":")[adRank].strip("\n")))
+                    self.counts[samples[i]] = [0]*(len(self.alts) + 1)
         self.asps = {}
         self.props = []
         self.miss = []

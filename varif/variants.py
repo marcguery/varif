@@ -1,4 +1,4 @@
-from sys import stderr
+from .config import Config
 from .variant import Variant
 
 
@@ -71,7 +71,7 @@ class Variants(object):
                     groups[index] = list(set(groups[index])-set(groupmissing))
 
         if len(warnings) > 0:
-            print("\n".join(warning for warning in warnings), file = stderr)
+            Config.error_print("\n".join(warning for warning in warnings))
         if len(errors) > 0:
             raise NameError("\n".join(error for error in errors))
         return groups
