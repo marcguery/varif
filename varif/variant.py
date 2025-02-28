@@ -5,13 +5,11 @@ from .config import Config
 class Variant(object):
     """A single line of a VCF file, requiring allele depth for each sample at each allele."""
     
-    def __init__(self, vcfLine, ranks, samples, samplesRanks, group1, group2, diffsamples1, diffsamples2):
+    def __init__(self, vcfLine, samples, group1, group2, diffsamples1, diffsamples2):
         """
         Arguments:
         vcfLine (str) : Raw VCF line
-        ranks (list) : Order of fields as in VCF specs
-        samples (list) : Names of samples 
-        samplesRanks (list) : Order of samples given in argument
+        samples (list) : Names of samples
         group1 (list) : Names of samples in first group of the comparison
         group2 (list) : Names of samples in second group of the comparison
         diffsamples1 (int) : Number of samples with the same allele in the first group (not the same as in second group)
@@ -38,13 +36,13 @@ class Variant(object):
         assert (len(group1) == 0 and len(group2)) == 0 or (len(group1) > 0 and len(group2) > 0)
         self.config = Config
         vcfLine = vcfLine.split("\t")
-        self.chromosome = vcfLine[ranks[0]]
-        self.position = vcfLine[ranks[1]]
+        self.chromosome = vcfLine[0]
+        self.position = vcfLine[1]
             
-        self.ref = vcfLine[ranks[3]]
+        self.ref = vcfLine[3]
         self.refwindow = ["",""]
-        self.alts = vcfLine[ranks[4]].split(",")
-        formatSplitted = vcfLine[ranks[8]].split(":")
+        self.alts = vcfLine[4].split(",")
+        formatSplitted = vcfLine[8].split(":")
         for i in range(len(formatSplitted)):
             if formatSplitted[i] == "AD":
                 adRank = i
@@ -55,16 +53,16 @@ class Variant(object):
         self.diffsamples2 = diffsamples2
         self.counts = {}
         #AD has to be int to be considered, float not permitted (float would be set to 0)
-        for i,n in enumerate(samplesRanks):
-            if samples[i] in self.group1+self.group2:
-                adsplit = vcfLine[n].split(":")[adRank].strip("\n").split(",")
-                self.counts[samples[i]] = [int(ad) if ad.isdigit() else 0 for ad in adsplit]
-                if len(self.counts[samples[i]]) < len(self.alts) + 1:
+        for i, sample in enumerate(samples):
+            if sample in self.group1+self.group2:
+                adsplit = vcfLine[i+9].split(":")[adRank].strip("\n").split(",")
+                self.counts[sample] = [int(ad) if ad.isdigit() else 0 for ad in adsplit]
+                if len(self.counts[sample]) < len(self.alts) + 1:
                     Config.error_print("Expected %s AD counts, only got %s. AD field was: '%s'. Set all AD counts to 0."%
                                        (len(self.alts) + 1, 
-                                        len(self.counts[samples[i]]),
-                                        vcfLine[n].split(":")[adRank].strip("\n")))
-                    self.counts[samples[i]] = [0]*(len(self.alts) + 1)
+                                        len(self.counts[sample]),
+                                        vcfLine[i+9].split(":")[adRank].strip("\n")))
+                    self.counts[sample] = [0]*(len(self.alts) + 1)
         self.asps = {}
         self.props = []
         self.miss = []

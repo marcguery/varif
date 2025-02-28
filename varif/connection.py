@@ -8,6 +8,7 @@ from .version import __version__
 import time
 import math
 from multiprocessing import Pool
+from itertools import repeat
 
 
 class Connection(object):
@@ -262,7 +263,7 @@ class Connection(object):
             content[7] = "):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaref, aaposref))+")" #the same aa ref in different features
             content[8] = "):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
         annotations = set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
-        content[9] = ":".join(annotations) if annotations != set() else content[9] #potentially different annotations
+        content[9] = ":".join(sorted(annotations)) if annotations != set() else content[9] #potentially different annotations
         for i, sample in enumerate(allvariants.samples):#asps
             content[16+i] = '{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
         line = sep.join(content)+"\n"
@@ -305,20 +306,21 @@ class Connection(object):
                 self.print_log(allvariants, key)
                 if allvariants.variants[key]["vcfline"] > vcfcorrespondingline:#Do not print the same line twice
                     vcfcorrespondingline = allvariants.variants[key]["vcfline"]
-                    filteredvcfcontent += allvariants.vcf.vcfchunk[vcfcorrespondingline-1]
+                    filteredvcfcontent += allvariants.vcf.vcfbody[vcfcorrespondingline-1]
         return [printedLine, filteredvcfcontent]
     
-    def get_variants_by_chunk(self, chunknumber):
+    def get_variants_by_chunk(self, vcf, chunknumber):
         """
         Process variants for a particular chunk of the total set of variants
 
+        vcf (Vcf) : The VCF object
         chunknumber (int) : The rank of the chunk to be processed
 
         return (list) : The ordered sample names of the variants processed and their annotation
 
         """
         start_time = time.time()
-        vcfchunk = Vcfchunk(chunknumber)
+        vcfchunk = Vcfchunk(chunknumber, vcf)
         vcfchunk.read_vcf()
         log = "Variants read in %s seconds"%(round(time.time()- start_time))
 
@@ -342,8 +344,8 @@ class Connection(object):
 
         """
         start_time = time.time()
-        self.vcf = Vcf
-        self.vcf.read_vcf_header(Config.options["vcf"])
+        self.vcf = Vcf()
+        self.vcf.read_vcf(Config.options["vcf"], headerOnly = True)
         self.vcf.count_lines()
         self.chunks = max(math.ceil((self.vcf.totlines-self.vcf.headerlinenumber)/Config.options["chunksize"]), Config.options["ncores"])
         intervals = self.vcf.define_intervals(self.chunks)
@@ -367,7 +369,7 @@ class Connection(object):
             
             Config.verbose_print("Processing chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
             pool = Pool(Config.options["ncores"])
-            results = pool.map(self.get_variants_by_chunk, range(chunk_set-incr+1,chunk_set+1))
+            results = pool.starmap(self.get_variants_by_chunk, zip(repeat(self.vcf), range(chunk_set-incr+1,chunk_set+1)))
             Config.verbose_print("\n".join(res[2] for res in results))
             self.samples = results[0][0]
             if not headerprinted:
