@@ -7,7 +7,7 @@ from .fasta import Fasta
 from .version import __version__
 import time
 import math
-from multiprocessing import Pool
+from multiprocessing import get_context
 from itertools import repeat
 
 
@@ -35,11 +35,10 @@ class Connection(object):
         """
 
         start_time = time.time()
-        Config.set_options()
+        Config.load_options()
         if Config.options["version"]:
             print(__version__)
             raise SystemExit
-        Config.check_options()
         print(("Running Varif %s"
               " with options \n%s")%(__version__,
                                      "\n".join(" : ".join([Config.long_options[opt], str(Config.options[opt])]) for opt in Config.options)))
@@ -309,18 +308,20 @@ class Connection(object):
                     filteredvcfcontent += allvariants.vcf.vcfbody[vcfcorrespondingline-1]
         return [printedLine, filteredvcfcontent]
     
-    def get_variants_by_chunk(self, vcf, chunknumber):
+    def get_variants_by_chunk(self, vcf, chunknumber, options):
         """
         Process variants for a particular chunk of the total set of variants
 
         vcf (Vcf) : The VCF object
         chunknumber (int) : The rank of the chunk to be processed
+        options (dict): The config options to use 
 
         return (list) : The ordered sample names of the variants processed and their annotation
 
         """
         start_time = time.time()
-        vcfchunk = Vcfchunk(chunknumber, vcf)
+        Config.copy_options(options)
+        vcfchunk = Vcfchunk(vcf, chunknumber)
         vcfchunk.read_vcf()
         log = "Variants read in %s seconds"%(round(time.time()- start_time))
 
@@ -368,8 +369,10 @@ class Connection(object):
             chunk_set += incr
             
             Config.verbose_print("Processing chunks %s to %s..."%(chunk_set-incr+1, chunk_set))
-            pool = Pool(Config.options["ncores"])
-            results = pool.starmap(self.get_variants_by_chunk, zip(repeat(self.vcf), range(chunk_set-incr+1,chunk_set+1)))
+            with get_context('spawn').Pool() as pool: #Using 'spawn' for Windows and macOS compatibility
+                results = pool.starmap(self.get_variants_by_chunk, zip(repeat(self.vcf),
+                                                                       range(chunk_set-incr+1,chunk_set+1),
+                                                                       repeat(Config.options)))
             Config.verbose_print("\n".join(res[2] for res in results))
             self.samples = results[0][0]
             if not headerprinted:

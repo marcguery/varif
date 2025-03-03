@@ -153,20 +153,15 @@ class Vcf(object):
 class Vcfchunk(Vcf):
     """Store variant chunks from a VCF file"""
 
-    def __init__(self, chunknumber = 1, vcf = None):
+    def __init__(self, vcf, chunknumber = 1):
         """
-        chunknumber (int) : The rank of the chunk of variants to use
         vcf (Vcf) : the VCF object created from the corresponding VCF file
+        
+        chunknumber (int) : The rank of the chunk of variants to use
         vcfbody (list) : The list of lines in the VCF chunk
 
         """
-        if vcf is not None:
-            assert type(vcf).__name__ == "Vcf"
-            self.__dict__.update(vcf.__dict__)
-        
-        if not self.readable_file():
-            Config.error_print("The VCF file has to be read several times, it should not be spawned by a subprocess")
-            raise FileNotFoundError("VCF file 'is not readable."%self.vcfpath)
+        self.copy(vcf)
         self.chunknumber = chunknumber
         self.vcfbody = []
     
@@ -174,8 +169,20 @@ class Vcfchunk(Vcf):
     def interval(self):
         return [self.intervals[self.chunknumber-1][0],self.intervals[self.chunknumber-1][1]]
     
+    def copy(self, vcf):
+        """Copy all attributes from an existing VCF object
+
+        Args:
+            vcf (Vcf): Preexisting Vcf object
+        """
+        assert type(vcf).__name__ == "Vcf"
+        self.__dict__.update(vcf.__dict__)
+        
+    
     def read_vcf(self):
         """Reads variants from a chunk of a VCF file"""
+        if not self.readable_file():
+            raise FileNotFoundError("VCF file '%s' is not readable for chunk #%s."%(self.vcfpath, self.chunknumber))
         firstline = max(self.headerlinenumber, self.interval[0])
         lastline = self.interval[1]
         self.vcfbody = []
