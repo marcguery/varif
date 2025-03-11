@@ -4,7 +4,6 @@ from .variants import Variants
 from .families import Families
 from .annotations import Annotations
 from .fasta import Fasta
-from .version import __version__
 import time
 import math
 from multiprocessing import get_context
@@ -28,7 +27,7 @@ class Connection(object):
         group2 (list) : Samples belonging to the 'group2' to be compared
         chunks (int) : Number of chunks to use to process the variants separately
         comparison (str) : Type of comparison to use between groups
-        intergenicRegions (bool) : Whether to include intergenic regions in the output
+        excludeIntergenic (bool) : Whether to exclude intergenic regions in the output
         outFile (str) : Name of the output file name
         outputVcf (bool) : Whether to also output the filtered VCF file
 
@@ -37,11 +36,9 @@ class Connection(object):
         start_time = time.time()
         Config.load_options()
         if Config.options["version"]:
-            print(__version__)
+            print(Config.version)
             raise SystemExit
-        print(("Running Varif %s"
-              " with options \n%s")%(__version__,
-                                     "\n".join(" : ".join([Config.long_options[opt], str(Config.options[opt])]) for opt in Config.options)))
+        Config.print_options()
         self.vcf = None
         self.families = Families()
         if Config.options["ped"] is not None:
@@ -57,11 +54,11 @@ class Connection(object):
         self.group2 = []
         self.chunks = 1
         self.comparison = Config.options["comparison"]
-        self.intergenicRegions = Config.options["intergenicRegions"]
+        self.excludeIntergenic = Config.options["excludeIntergenic"]
         self.outFile = Config.options["outFile"]
         self.outputVcf = Config.options["outputVcf"]
         self.get_all_groups()
-        print("Varif run was completed in %s seconds"%(round(time.time() - start_time)))
+        Config.verbose_print("Varif run was completed in %s seconds"%(round(time.time() - start_time)))
         
     
         
@@ -112,7 +109,9 @@ class Connection(object):
         if len(reference) > 1:
             #Remove bases from the reference if located in an intronic region
             newReference, newReferencePosition = self.fasta.remove_bases_from_features(reference, intronCoords, position-1)
-            assert newReference != "", "The reference sequence is not located in a CDS"
+            if newReference == "":
+                Config.error_print("The reference sequence is not located in a CDS")
+                raise ValueError
         else:
             #For SNPs, no difference : if they were located in an intron, this function would not be called
             newReference, newReferencePosition = [reference, position - 1]
@@ -290,7 +289,7 @@ class Connection(object):
 
             allvariants.variants[key]["features"] = gffIds
             self.define_categories(allvariants, key)
-            if len(allvariants.variants[key]["features"]) == 0 and self.intergenicRegions is False:
+            if len(allvariants.variants[key]["features"]) == 0 and self.excludeIntergenic is True:
                 continue #No feature-surrounded variants
             allvariants.variants[key]["refwindow"] = self.fasta.window_sequence(allvariants.variants[key]["chromosome"],
             allvariants.variants[key]["position"], allvariants.variants[key]["ref"],
@@ -412,7 +411,9 @@ class Connection(object):
             long_names = True if max([len(samplename) for samplename in families]) > 30 else False
             if long_names:
                 Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
-            assert len(families) > 1, "Not enough families to make a group comparison"
+            if len(families) <= 1:
+                Config.error_print("Not enough families to make a group comparison")
+                raise ValueError
 
             for family_id in range(0,len(families)-1):
                 family1 = families[family_id]
@@ -420,7 +421,7 @@ class Connection(object):
                 for other_family_id in range(family_id+1, len(families)):
                     family2 = families[other_family_id]
                     self.group2 = self.families.families[family2]
-                    print("Group comparison of families %s (id : %i) and %s (id : %i)"%(family1, family_id, family2, other_family_id))
+                    Config.verbose_print("Group comparison of families %s (id : %i) and %s (id : %i)"%(family1, family_id, family2, other_family_id))
                     outFileInfo = self.outFile + "-"+family1+"_with_"+family2 if not long_names else self.outFile + "-"+str(family_id)+"_with_"+str(other_family_id)
                     self.get_variants(outFileInfo)
         
@@ -429,7 +430,9 @@ class Connection(object):
             long_names = True if max([len(samplename) for samplename in parents]) > 30 else False
             if long_names:
                 Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
-            assert len(parents) >= 1, "Not enough parents-offsprings to make a group comparison"
+            if len(parents) < 1:
+                Config.error_print("Not enough parents-offsprings to make a group comparison")
+                raise ValueError
 
             for index,mates in enumerate(parents):
                 if mates == "NA":
@@ -443,7 +446,7 @@ class Connection(object):
                 self.group1 = matesnames
                 self.group2 = self.families.parents[mates]
 
-                print("Group comparison of parent%s %s%s%s (id : %i) with their offspring"%(plural[0], mate1, plural[1], mate2, index))
+                Config.verbose_print("Group comparison of parent%s %s%s%s (id : %i) with their offspring"%(plural[0], mate1, plural[1], mate2, index))
                 outFileInfo = self.outFile + "-"+mate1+addingmates+mate2+"_with_offspring" if not long_names else self.outFile + "-"+str(index)+"_with_offspring"
                 self.get_variants(outFileInfo)
         
@@ -452,13 +455,15 @@ class Connection(object):
             long_names = True if max([len(samplename) for samplename in families]) > 30 else False
             if long_names:
                 Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
-            assert len(families) > 0, "There are no families in the PED file"
+            if len(families) == 0:
+                Config.error_print("There are no families in the PED file")
+                raise ValueError
 
             for family_id in range(0,len(families)):
                 family = families[family_id]
                 self.group1 = self.families.families[family]
                 self.group2 = self.group1
-                print("Self-self comparison of family %s (id : %i)"%(family, family_id))
+                Config.verbose_print("Self-self comparison of family %s (id : %i)"%(family, family_id))
                 outFileInfo = self.outFile + "-"+family if not long_names else self.outFile + "-"+str(family_id)
                 self.get_variants(outFileInfo)
         

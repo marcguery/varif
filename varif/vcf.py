@@ -144,7 +144,7 @@ class Vcf(object):
         if  min(uniquechunksizes) < 100:
             log = ("Low chunk size of %s detected,"
                     " consider increasing the chunk size upper limit or reducing the number of cores.")%min(uniquechunksizes)
-            print(log)
+            Config.verbose_print(log)
         
         return uniquechunksizes
         

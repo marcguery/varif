@@ -42,7 +42,7 @@ class Variants(object):
         
         for index, group in enumerate(groups):
             if len(groups[index]) < diffsamples[index]:
-                print("Reassigning requested number of diff. samples (%s) to group size (%s)"%(diffsamples[index],len(groups[index])))
+                Config.verbose_print("Reassigning requested number of diff. samples (%s) to group size (%s)"%(diffsamples[index],len(groups[index])))
                 diffsamples[index] = len(groups[index])
         
         return diffsamples
