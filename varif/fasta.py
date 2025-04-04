@@ -234,7 +234,9 @@ class Fasta(object):
         genesequence = ""
         for coord in cdsCoords:
             genesequence += self.data[chromosome][coord[0]:coord[1]]
-        assert len(genesequence)%3 == 0
+        if len(genesequence)%3 != 0:
+            Config.error_print("Shortened a coding sequence that was not a multiple of 3.")
+            genesequence = genesequence[0:-(len(genesequence)%3)]
         return genesequence
     
     def window_sequence(self, chromosome, position, sequence, windowBefore, windowAfter):

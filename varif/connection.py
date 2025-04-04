@@ -262,8 +262,8 @@ class Connection(object):
             content[8] = "):".join(" (".join(str(cont) for cont in couple) for couple in zip(aaalts, aaposalts))+")" #different aa alt
         annotations = set(self.annotations.annotations[geneId]['description']+" ("+geneId+")" for geneId in allvariants.variants[variantId]["features"] if "gene" in self.annotations.annotations[geneId]['annotation'])
         content[9] = ":".join(sorted(annotations)) if annotations != set() else content[9] #potentially different annotations
-        for i, sample in enumerate(allvariants.samples):#asps
-            content[16+i] = '{:.6f}'.format(allvariants.variants[variantId]["asps"][sample][altIndex+1])
+        for i, sample in enumerate(allvariants.samples):#vafs
+            content[16+i] = '{:.6f}'.format(allvariants.variants[variantId]["vafs"][sample][altIndex+1])
         line = sep.join(content)+"\n"
         return line
 
@@ -426,28 +426,32 @@ class Connection(object):
                     self.get_variants(outFileInfo)
         
         if compare_lineages:
-            parents = list(self.families.parents.keys())
-            long_names = True if max([len(samplename) for samplename in parents]) > 30 else False
+            long_names = True if max([len(parent1)+len(parent2) for parent1, parent2 in self.families.mates]) > 30 else False
             if long_names:
                 Config.error_print("Sample names exceed the limit of 30 characters, will use index instead for file names")
-            if len(parents) < 1:
+            if len(self.families.mates) == 0:
                 Config.error_print("Not enough parents-offsprings to make a group comparison")
                 raise ValueError
 
-            for index,mates in enumerate(parents):
-                if mates == "NA":
-                    continue
-                matesnames = mates.split()
-                plural = ["s", " and "] if len(matesnames) == 2 else ["", ""]
-                addingmates = "-and-" if len(matesnames) == 2 else ""
-                mate1 = matesnames[0]
-                mate2 = matesnames[1] if len(matesnames) == 2 else ""
+            for index, parents in enumerate(self.families.mates):
+                parent1 = parents[0]
+                parent2 = parents[1]
+                if parent1 != parent2:
+                    plural = ["s", " and "]
+                    addingmates = "-and-"
+                else:
+                    plural = ["", ""]
+                    addingmates = ""
+                    parent2 = ""
 
-                self.group1 = matesnames
-                self.group2 = self.families.parents[mates]
+                self.group1 = parents
+                self.group2 = self.families.offspring[index]
 
-                Config.verbose_print("Group comparison of parent%s %s%s%s (id : %i) with their offspring"%(plural[0], mate1, plural[1], mate2, index))
-                outFileInfo = self.outFile + "-"+mate1+addingmates+mate2+"_with_offspring" if not long_names else self.outFile + "-"+str(index)+"_with_offspring"
+                Config.verbose_print("Group comparison of parent%s %s%s%s (id : %i) with their offspring"%(plural[0], parent1, plural[1], parent2, index))
+                if not long_names:
+                    outFileInfo = self.outFile + "-" + parent1 + addingmates + parent2 + "_with_offspring"
+                else:
+                    outFileInfo = self.outFile + "-" + str(index) + "_with_offspring"
                 self.get_variants(outFileInfo)
         
         if compare_selfself:

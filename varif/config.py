@@ -18,13 +18,14 @@ class Config(object):
                                "ped": "PED file", "comparison": "Comparison",
                                "nuclWindowBefore": "Nucleotides before", "nuclWindowAfter": "Nucleotides after",
                                "protWindowBefore": "Aminoacids before", "protWindowAfter": "Aminoacids after",
-                               "mindepth" : "Minimal depth", "minaltasp" : "Alt ASP", "maxrefasp": "Ref ASP", 
+                               "mindepth" : "Minimal depth", 
+                               "minVafHomozygous" : "Min. VAF for homozygous variants", "minVafPresent": "Min. VAF for present variants", 
                                "excludeIntergenic": "Exclude intergenic regions", 
                                "maxHeteroz": "Max. ratio of heterozygous loci", "maxMissing": "Max. ratio of missing loci",
                                "minApfDiff": "Min. diff in APF", "minSamplesDiff": "Min. number of diff. samples",
                                "minMaf1": "Min. MAF (1 group)", "maxMaf1": "Max. MAF (1 group)",
                                "minMaf2": "Min. MAF (2 groups)", "maxMaf2": "Max. MAF (2 groups)",
-                               "outputVcf": "Output VCF", "verbose":"Verbosity",
+                               "outputVcf": "Output VCF", "verbose":"Verbose",
                                "version": "Version"}
     
     @staticmethod
@@ -109,38 +110,54 @@ class Config(object):
             if not 0 <= cls._options[arg] <= 0.5:
                 cls.error_print("%s shoud be between 0 and 0.5, not %s"%(cls.long_options[arg], cls._options[arg]))
                 raise ValueError()
-        if cls._options["minMaf1"] < cls._options["minMaf2"] or cls._options["maxMaf1"] > cls._options["maxMaf2"]:
-            cls._options["minMaf1"] = cls._options["minMaf2"] if cls._options["minMaf1"] < cls._options["minMaf2"] else cls._options["minMaf1"]
-            cls._options["maxMaf1"] = cls._options["maxMaf2"] if cls._options["maxMaf1"] > cls._options["maxMaf2"] else cls._options["maxMaf1"]            
-            holdprint.append("Reassigned 'minMaf1' and/or 'maxMaf1' to custom values of 'minMaf2' and/or 'maxMaf2'")
+        if cls._options["minMaf1"] < cls._options["minMaf2"]:
+            oldminmaf1 = cls._options["minMaf1"]
+            cls._options["minMaf1"] = cls._options["minMaf2"]
+            holdprint.append("Reassigned '%s' (was %s) to the value of '%s' (%s)"%(cls.long_options["minMaf1"],
+                                                                                   oldminmaf1,
+                                                                                   cls.long_options["minMaf2"],
+                                                                                   cls._options["minMaf2"]))
+        if cls._options["maxMaf1"] > cls._options["maxMaf2"]:
+            oldmaxmaf1 = cls._options["maxMaf1"]
+            cls._options["maxMaf1"] = cls._options["maxMaf2"]
+            holdprint.append("Reassigned '%s' (was %s) to the value of '%s' (%s)"%(cls.long_options["maxMaf1"],
+                                                                                   oldmaxmaf1,
+                                                                                   cls.long_options["maxMaf2"],
+                                                                                   cls._options["maxMaf2"]))
         if not cls._options["minMaf2"] <= cls._options["minMaf1"] <= cls._options["maxMaf1"] <= cls._options["maxMaf2"]:
             cls.error_print("MAF cutoffs did not satisfy these conditions:"+
                              "\n %s (was %s) <= %s (was %s) <= %s (was %s) <= %s (was %s)"%(cls.long_options["minMaf2"],
                                                                                             cls._options["minMaf2"],
-                                                                                                           cls.long_options["minMaf1"],
-                                                                                                           cls._options["minMaf1"],
-                                                                                                           cls.long_options["maxMaf1"],
-                                                                                                           cls._options["maxMaf1"],
-                                                                                                           cls.long_options["maxMaf2"],
-                                                                                                           cls._options["maxMaf2"]))
+                                                                                            cls.long_options["minMaf1"],
+                                                                                            cls._options["minMaf1"],
+                                                                                            cls.long_options["maxMaf1"],
+                                                                                            cls._options["maxMaf1"],
+                                                                                            cls.long_options["maxMaf2"],
+                                                                                            cls._options["maxMaf2"]))
             raise ValueError()
         
-        for arg in ["minaltasp", "maxrefasp", "maxMissing", "minApfDiff"]:
+        if cls._options["minVafPresent"] is None:
+            cls._options["minVafPresent"] = cls._options["minVafHomozygous"]
+            holdprint.append("Assigned %s to the value of %s (%s)"%(cls.long_options["minVafPresent"], 
+                                                                    cls.long_options["minVafHomozygous"],
+                                                                    cls._options["minVafHomozygous"]))
+        
+        for arg in ["minVafHomozygous", "minVafPresent", "maxMissing", "minApfDiff"]:
             if not 0 <= cls._options[arg] <= 1:
                 cls.error_print("%s must be a proportion, was %s"%(cls.long_options[arg], cls._options[arg]))
                 raise ValueError()
-        if cls._options["maxrefasp"] >= cls._options["minaltasp"]:
-            cls.error_print("%s (was %s) should be <= to %s (was %s)"%(cls.long_options["maxrefasp"],
-                                                                       cls._options["maxrefasp"],
-                                                                       cls.long_options["minaltasp"],
-                                                                       cls._options["minaltasp"]))
+        if cls._options["minVafPresent"] > cls._options["minVafHomozygous"]:
+            cls.error_print("%s (was %s) should be <= to %s (was %s)"%(cls.long_options["minVafPresent"],
+                                                                       cls._options["minVafPresent"],
+                                                                       cls.long_options["minVafHomozygous"],
+                                                                       cls._options["minVafHomozygous"]))
             raise ValueError()
         
         if len(cls._options["outFile"].split("/")[-1]) > 100:
             cls.error_print("%s must not exceed 100 characters"%(cls.long_options["outFile"]))
             raise ValueError()
         
-        if not os.path.isdir(os.path.dirname(cls._options["outFile"])):
+        if os.path.dirname(cls._options["outFile"]) != "" and not os.path.isdir(os.path.dirname(cls._options["outFile"])):
             cls.error_print("Directory '%s' does not exist"%(cls._options["outFile"]))
             raise FileNotFoundError()
         
@@ -164,8 +181,8 @@ class Config(object):
         parser = argparse.ArgumentParser(description = '''
             Filter and annotate alleles likely to be
             differentially mutated among samples by comparing 
-            their Allele Sample Proportions (ASPs)
-            ''', formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 30, width = 100))
+            their Variant Allele Frequencies (VAFs)
+            ''', formatter_class = lambda prog: argparse.HelpFormatter(prog, max_help_position = 30, width = 80))
         
         parser.add_argument('-vcf', type = str, default = None,
                             metavar = "FILE",
@@ -213,12 +230,12 @@ class Config(object):
         parser.add_argument('--depth', dest = 'mindepth', type = int, default = 5,
                             metavar = "INT",
                             help = 'Minimal read depth for a sample variant to be considered [%(default)i]')
-        parser.add_argument('--ratio-alt', dest = 'minaltasp', type = float, default = 0.8,
+        parser.add_argument('--min-vaf-homozygous', dest = 'minVafHomozygous', type = float, default = 0.8,
                             metavar = "FLOAT",
-                            help = 'Minimal sample proportion of allele/total read depth to ignore other alleles [%(default).2f]')
-        parser.add_argument('--ratio-ref', dest = 'maxrefasp', type = float, default = 0.2,
+                            help = 'Minimal VAF for a variant to be considered homozygous [%(default).2f]')
+        parser.add_argument('--min-vaf-present', dest = 'minVafPresent', type = float, default = 0.05,
                             metavar = "FLOAT",
-                            help = 'Maximal sample proportion of allele/total read depth to ignore it [%(default).2f]')
+                            help = 'Minimal VAF for a variant to be considered present [%(default).2f]')
         
         parser.add_argument('--exclude-intergenic', dest = 'excludeIntergenic', action = 'store_true',
                             default = False,

@@ -78,7 +78,7 @@ class Variants(object):
 
     def process_vcf_variant(self, vcfline):
         """
-        Calculate ASPs then APPs from variants at a given VCF line
+        Calculate VAFs then APPs from variants at a given VCF line
 
         vcfline (int) : Variants from this line number of the VCF will be processed
 
@@ -86,8 +86,8 @@ class Variants(object):
         variant = Variant(self.vcf.vcfbody[vcfline-1],
                           self.vcf.samples, 
                           self.group1, self.group2, self.diffsamples1, self.diffsamples2)
-        variant.calculate_asps()
-        variant.apf_from_asps()
+        variant.calculate_vafs()
+        variant.apf_from_vafs()
 
         # Generate unique ID for each variant
         # and for same Chromosome/position variants
@@ -100,7 +100,7 @@ class Variants(object):
             "categories": variant.categories,
             "ref": variant.ref, "alts": variant.alts,
             "refwindow": variant.refwindow,
-            "asps": variant.asps,
+            "vafs": variant.vafs,
             "features": [],
             "aaPosRef": {},
             "aaPosAlts": {},

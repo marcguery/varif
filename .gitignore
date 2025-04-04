@@ -3,3 +3,7 @@ build/*
 *egg*/*
 .vscode/*
 test/*
+examples/out/*
+examples/data/Pf7-Gambia-subset.vcf
+examples/data/PlasmoDB-46_Pfalciparum3D7_Genome.fasta
+examples/data/PlasmoDB-46_Pfalciparum3D7.gff

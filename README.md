@@ -22,7 +22,9 @@ export PYTHONPATH=$(pwd -P)/varif:$PYTHONPATH
 
 # Inputs
 
-All input files must have the same chromosome names.
+All input files must have the same chromosome names. 
+
+Mock data can be found (compressed) in `examples/data`.
 
 ## VCF (`-vcf`)
 
@@ -56,7 +58,7 @@ The FASTA file containing one sequence per chromosome.
 
 ## PED (`--ped`)
 
-The optional PED file containing the family membership and parental relationships between samples from the VCF file. This file should be formatted as described in https://zzz.bwh.harvard.edu/plink/data.shtml#ped.
+The optional PED file containing the family membership and parental relationships between samples from the VCF file. This file should be formatted as described in https://zzz.bwh.harvard.edu/plink/data.shtml#ped. For the family, maternal and paternal IDs, an empty value indicates that they are unknown.
 
 Only samples present in the PED file will be processed.
 
@@ -66,46 +68,51 @@ Use `varif` to filter and annotate variants submitted through a VCF file.
 
 ```
 options:
-  -h, --help                show this help message and exit
-  -vcf FILE                 VCF file
-  -gff FILE                 GFF3 file
-  -fasta FILE               FASTA file
-  -outfilename FILENAME     Name of the main output file (no extension) that
-                            will be appended with the group names
-  --ncores INT              Number of parallel jobs to run
-  --chunk-size INT          Maximal number of variants to be processed in each
-                            chunk
-  --ped FILE                PED file
-  --comparison STR          Compare variants between "families", "lineages",
-                            "self" or "all"
-  --nucl-window-before INT  Number of bases to include before the allele
-  --nucl-window-after INT   Number of bases to include after the allele
-  --prot-window-before INT  Number of amino acids to include before the allele
-  --prot-window-after INT   Number of amino acids to include after the allele
-  --depth INT               Minimal read depth for a sample variant to be
-                            considered
-  --ratio-alt FLOAT         Minimal sample proportion of allele/total read depth
-                            to ignore other alleles
-  --ratio-ref FLOAT         Maximal sample proportion of allele/total read depth
-                            to ignore it
-  --exclude-intergenic      Keep only variants from gene-annotated regions
-  --max-heterozygous FLOAT  Maximal proportion of heterozygous loci in each
-                            group
-  --max-missing FLOAT       Maximal proportion of missing loci in each group
-  --min-apf-diff FLOAT      Minimal difference in allele population frequency
-                            between groups
-  --min-samples-diff INT    Minimal difference in the number of samples with a
-                            distinct allele between groups
-  --min-maf1 FLOAT          Minimal population MAF reached in a group
-  --max-maf1 FLOAT          Maximal population MAF reached in a group
-  --min-maf2 FLOAT          Minimal population MAF reached in both groups
-  --max-maf2 FLOAT          Maximal population MAF reached in both groups
-  --output-vcf              Output filtered VCF file(s)
-  --verbose                 Show more details
-  --version                 Show varif version
+  -h, --help                  show this help message and exit
+  -vcf FILE                   VCF file
+  -gff FILE                   GFF3 file
+  -fasta FILE                 FASTA file
+  -outfilename FILENAME       Name of the main output file (no extension) that
+                              will be appended with the group names
+  --ncores INT                Number of parallel jobs to run [1]
+  --chunk-size INT            Maximal number of variants to be processed in each
+                              chunk [1000]
+  --ped FILE                  PED file
+  --comparison STR            Compare variants between "families", "lineages",
+                              "self" or "all" [all]
+  --nucl-window-before INT    Number of bases to include before the allele [0]
+  --nucl-window-after INT     Number of bases to include after the allele [0]
+  --prot-window-before INT    Number of amino acids to include before the allele
+                              [0]
+  --prot-window-after INT     Number of amino acids to include after the allele
+                              [0]
+  --depth INT                 Minimal read depth for a sample variant to be
+                              considered [5]
+  --min-vaf-homozygous FLOAT  Minimal VAF for a variant to be considered
+                              homozygous [0.80]
+  --min-vaf-present FLOAT     Minimal VAF for a variant to be considered present
+                              [0.05]
+  --exclude-intergenic        Exclude variants outside of gene-annotated regions
+  --max-heterozygous FLOAT    Maximal proportion of heterozygous loci in each
+                              group [1.00]
+  --max-missing FLOAT         Maximal proportion of missing loci in each group
+                              [1.00]
+  --min-apf-diff FLOAT        Minimal difference in allele population frequency
+                              between groups [0.00]
+  --min-samples-diff INT      Minimal difference in the number of samples with a
+                              distinct allele between groups [0]
+  --min-maf1 FLOAT            Minimal population MAF reached in a group [0.00]
+  --max-maf1 FLOAT            Maximal population MAF reached in a group [0.50]
+  --min-maf2 FLOAT            Minimal population MAF reached in both groups
+                              [0.00]
+  --max-maf2 FLOAT            Maximal population MAF reached in both groups
+                              [0.50]
+  --output-vcf                Output filtered VCF file(s) [False]
+  --verbose                   Show more details
+  --version                   Show varif version
 ```
 
-For each allele in each sample, `varif` will calculate the allele sample proportion (see [Allele Sample Proportions](#asp)) and classify it as true homozygous or not based on filters applied with the available options. The values of all allele sample proportions are compared to find sites likely to be differentially mutated between group of samples.
+For each allele in each sample, `varif` will calculate the VAF (see [Variant Allele Frequency](#vaf)) and classify it as  homozygous or not based on filters applied with the available options. The values of all VAFs are compared to find sites likely to be differentially mutated between group of samples.
 
 Alleles passing the filters will be stored in a CSV file (multiple alleles at the same position are separated) generated with the name (without extension) set by the option `-outfilename`. If the option `--output-vcf` is set, the corresponding filtered variants (multiple alleles at the same position are merged) from the VCF file will be saved as well. Each combination of  groups compared will lead to a unique CSV (and VCF) file (see [Sample groups](#groups)).
 
@@ -135,7 +142,7 @@ The output CSV file separated by semicolons contains:
 - ***Missingness_G1*** : The proportion of group 1 samples with a missing locus
 - ***Heterozygous_G1*** : The proportion of group 1 samples (excluding samples with missing locus) with a heterozygous loci
 - ***Alt_frequency_G1*** : The alternate allele population frequency of group 1 samples (excluding samples with missing locus)
-- The remaining columns contain the allele proportion of each sample (ASPs)
+- The remaining columns contain the allele proportion of each sample (VAFs)
 
 \*: Applies for CDS regions, otherwise *NA*
 
@@ -143,19 +150,24 @@ The output CSV file separated by semicolons contains:
 
 Note that when the CDS_alt field is empty and that the _lt field contains '*(0/0)*', this means that both reference and mutated CDS sequences are identical (this can happen when an INDEL occurs at the edge of a CDS and an intron).
 
-## <a name="asp"></a>Allele Sample Proportions (ASP)
+## <a name="vaf"></a>Variant Allele Frequency (VAF)
 
-There are 2 cut-offs of minimal alternate ASP (minVSP with `--ratio-alt`) and maximal reference ASP (maxRSP with `--ratio-ref`) to determine if a sample is carrying the reference or alternate allele. By default, minVSP is equal to 0.8 and maxRSP to 0.2.
+The proportion of reads supporting an allele in a sample, called variant allele frequency (VAF), is used to determine if a sample homozygous for the allele.
 
-For each allele and for each sample, the ASP is calculated using the different allele read depths (ARD):
+For each allele and for each sample, the VAF is calculated using the different read depths (RD):
 
-***ASP*** = (*alternate ARD*) / (*all alternates ARD* + *reference ARD*)
+***VAF*** = *variant RD* / *total* *RD*
 
-If the ASP is above minVSP, the loci is considered homozygous for the alternate allele, while if the ASP is below maxRSP, the loci is considered homozygous for the non alternate allele. When the ASP is between maxRSP and minVSP, the genotype cannot be called and the variant is heterozygous.
+The limit of detection of variants can be set with `--min-vaf-present` (defaults to 0.05), with a VAF below this value resulting in the variant being ignored. 
+
+The VAF of each locus is used to classify a sample as:
+
+- Homozygous if the VAF is above `--min-vaf-homozygous` (defaults to 0.8)
+- Heterozygous if the VAF is between `--min-vaf-present` and `--min-vaf-homozygous`.
 
 ## <a name="groups"></a>Sample groups
 
-Samples can be separated into groups which can have their allele frequencies compared with the option `--comparison` with one of the keywords *families*,*self*, *lineages*, or *all* (the default). Samples are grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution can be compared:
+Samples can be separated into groups which can have their allele frequencies compared with the option `--comparison` with one of the keywords *families*, *self*, *lineages*, or *all* (the default). Samples are grouped into families or parental-offspring relationships according to the metadata from the PED file. Allele differential distribution can be compared:
 
 - between every combination of families (*families*),
 - within all members of each family (*self*),
@@ -166,11 +178,11 @@ Samples can be separated into groups which can have their allele frequencies com
 
 ## Minimal depth
 
-The ASPs are calculated only if the sample read depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
+The VAFs are calculated only if the sample read depth (the sum of all the reads REF and ALTs) is equal or superior to the value provided with the option `--depth`, with a default value of 5.
 
 ## Allele population frequencies
 
-The options `--min-apf-diff` (default 0) and `--min-samples-diff` (default 0) compare the prevalence of homozygous alleles (determined for each sample from ASPs) between the groups defined by the PED file.
+The options `--min-apf-diff` (default 0) and `--min-samples-diff` (default 0) compare the prevalence of homozygous alleles (determined for each sample from VAFs) between the groups defined by the PED file.
 
 The option `--min-apf-diff` corresponds to the minimal difference in (either alternate or reference) allele frequencies between groups to keep a variant. Allele frequency is calculated with the formula:
 
@@ -184,7 +196,7 @@ By default, all genomic regions are included. However, alleles outside a gene (a
 
 ## Missing data
 
-Variants with too many missing (because of insufficient depth) or heterozygous (ASP between maxRSP and minVSP) genotypes can be filtered out respectively with `--max-missing` and `--max-heterozygous` (default 1) which discards alleles if one group has more missing/heterozygous genotypes than the selected proportion.
+Variants with too many missing (because of insufficient depth) or heterozygous (VAF between maxRSP and minVSP) genotypes can be filtered out respectively with `--max-missing` and `--max-heterozygous` (default 1) which discards alleles if one group has more missing/heterozygous genotypes than the selected proportion.
 
 ## Population Minor Allele Frequencies (MAF)
 
@@ -229,13 +241,17 @@ Amino acids affected by the reference and alternate sequence are obtained by tra
 
 ## Multiprocessing and memory
 
-The most time consuming step of the pipeline is when the ASPs are calculated. Variants are processed by chunk whose number is determined from an upper limit on the number of variants processed by chunk set by `--chunk-size` (1000 variants by chunk by default). The number of variants by chunk can be reduced (down to 100) to save up on memory, although this will increase the running time. Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The size of chunks may be reduced so that the total number of chunks match the number of cores.
+The most time consuming step of the pipeline is when the VAFs are calculated. Variants are processed by chunk whose number is determined from an upper limit on the number of variants processed by chunk set by `--chunk-size` (1000 variants by chunk by default). The number of variants by chunk can be reduced (down to 100) to save up on memory, although this will increase the running time. Several chunks can be processed at the same time by increasing the number of cores with `--ncores` (1 by default). The size of chunks may be reduced so that the total number of chunks match the number of cores.
 
 # Limitations
 
-## Reference and alternate alleles
+## Comparison between alleles
 
-For now, `varif` compares allele frequencies of the alternate allele with allele frequencies of the **non-alternate** allele(s) rather than the reference allele. In this documentation, reference should then be read as non-alternate. Although confusing reference with non-alternate can be appropriate with bi-allelic variants, this is not the case with multi-allelic variants.
+For now, `varif` compares allele frequencies of an allele with allele frequencies of the all other alleles combined. In the case of multi-allelic variants (more than 2 alleles), it would be interesting to compare each pair of alleles instead.
+
+## Memory requirement for annotations files
+
+For now, the whole FASTA and GFF files are loaded into memory. In the future, the VCF chunks will be used to load only the parts of those files that are relevant, reducing the load.
 
 ## Multi allelic CDS
 
@@ -253,18 +269,23 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
 
 # Examples
 
+Mock data is located in `examples/data` of the `varif` repository.
+
 1. 
 
-   - Save all possible alleles regardless of their ASPs (calculated if &gt; 5 read depth)
+   - Save all possible alleles regardless of their VAFs (calculated if &gt; 5 read depth)
    
    - Process in parallel 4 batches of 1000 variants
    
    ```bash
-   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
-       -outfilename ./out/filtered-variants \
+   varif -vcf examples/data/Pf7-Gambia-subset.vcf \
+       -gff examples/data/PlasmoDB-46_Pfalciparum3D7.gff \
+       -fasta examples/data/PlasmoDB-46_Pfalciparum3D7_Genome.fasta \
+       -outfilename examples/out/filtered-variants-1 \
        --output-vcf --chunk-size 1000 --ncores 4 \
        --depth 5 \
-       --min-apf-diff 0 --min-samples-diff 0
+       --min-apf-diff 0 --min-samples-diff 0 \
+       --verbose
    ```
    
 2. Same as 1. +
@@ -276,69 +297,81 @@ if an INDEL includes the edge between a CDS and an intron, the resulting protein
    - Add 5 amino acids upstream and downstream of the alleles
    
    ```bash
-   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
-       -outfilename ./out/filtered-variants \
+   varif -vcf examples/data/Pf7-Gambia-subset.vcf \
+       -gff examples/data/PlasmoDB-46_Pfalciparum3D7.gff \
+       -fasta examples/data/PlasmoDB-46_Pfalciparum3D7_Genome.fasta \
+       -outfilename examples/out/filtered-variants-2 \
        --output-vcf --chunk-size 1000 --ncores 4 \
        --depth 5 \
        --min-apf-diff 0 --min-samples-diff 0 \
        --exclude-intergenic \
        --nucl-window-before 10 --nucl-window-after 10 \
-       --prot-window-before 5 --prot-window-after 5
+       --prot-window-before 5 --prot-window-after 5 \
+       --verbose
    ```
    
 3. Same as 2. +
 
-   - Attribute alternate allele to samples with ASP &ge; 0.8, reference allele to samples with ASP &le; 0.2
+   - Attribute homozygous loci to samples with VAF &ge; 0.8, ignore variants if VAF &lt; 0.2
    
    - Keep only variants differentially distributed among all samples : &ge; 1 sample with an allele and &ge; 1 sample with the other allele
    
    ```bash
-   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
-       -outfilename ./out/filtered-variants \
+   varif -vcf examples/data/Pf7-Gambia-subset.vcf \
+       -gff examples/data/PlasmoDB-46_Pfalciparum3D7.gff \
+       -fasta examples/data/PlasmoDB-46_Pfalciparum3D7_Genome.fasta \
+       -outfilename examples/out/filtered-variants-3 \
        --output-vcf --chunk-size 1000 --ncores 4 \
-       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --depth 5 --min-vaf-homozygous 0.8 --min-vaf-present 0.2 \
        --min-apf-diff 0 --min-samples-diff 1 \
        --exclude-intergenic \
        --nucl-window-before 10 --nucl-window-after 10 \
        --prot-window-before 5 --prot-window-after 5 \
-       --comparison all
+       --comparison all \
+       --verbose
    ```
    
 4. Same as 2. +
 
-   - Attribute alternate allele to samples with ASP &ge; 0.8, reference allele to samples with ASP &le; 0.2
+   - Attribute homozygous loci to samples with VAF &ge; 0.8, ignore variants if VAF &lt; 0.2
    
    - Keep only variants differentially distributed between pairs of families of samples (PED file) : &ge; 1 sample with an allele in one family and &ge; 1 sample with the other allele in the other family
    
    ```bash
-   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
-       -outfilename ./out/filtered-variants \
+   varif -vcf examples/data/Pf7-Gambia-subset.vcf \
+       -gff examples/data/PlasmoDB-46_Pfalciparum3D7.gff \
+       -fasta examples/data/PlasmoDB-46_Pfalciparum3D7_Genome.fasta \
+       -outfilename examples/out/filtered-variants-4 \
        --output-vcf --chunk-size 1000 --ncores 4 \
-       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --depth 5 --min-vaf-homozygous 0.8 --min-vaf-present 0.2 \
        --min-apf-diff 0 --min-samples-diff 1 \
        --exclude-intergenic \
        --nucl-window-before 10 --nucl-window-after 10 \
        --prot-window-before 5 --prot-window-after 5 \
-       --ped my_ped.ped --comparison families
+       --ped examples/data/Pf7-Gambia.ped --comparison families \
+       --verbose
    ```
    
 5. Same as 2. +
 
-   - Attribute alternate allele to samples with ASP &ge; 0.8, reference allele to samples with ASP &le; 0.2
+   - Attribute homozygous loci to samples with VAF &ge; 0.8, ignore variants if VAF &lt; 0.2
    
    - Keep only variants differentially distributed between pairs of parent/offspring of samples (PED file) : &ge; 2 samples with an allele in one parent/offspring and &ge; 2 samples with the other allele in the other parent/offspring
    
    - Keep variants with 80 % of samples with non-missing call in each group
    
    ```bash
-   varif -vcf my_vcf.vcf -gff my_gff.gff -fasta my_fasta.fasta \
-       -outfilename ./out/filtered-variants \
+   varif -vcf examples/data/Pf7-Gambia-subset.vcf \
+       -gff examples/data/PlasmoDB-46_Pfalciparum3D7.gff \
+       -fasta examples/data/PlasmoDB-46_Pfalciparum3D7_Genome.fasta \
+       -outfilename examples/out/filtered-variants-5 \
        --output-vcf --chunk-size 1000 --ncores 4 \
-       --depth 5 --ratio-alt 0.8 --ratio-ref 0.2 \
+       --depth 5 --min-vaf-homozygous 0.8 --min-vaf-present 0.2 \
        --min-apf-diff 0 --min-samples-diff 2 \
        --exclude-intergenic \
        --nucl-window-before 10 --nucl-window-after 10 \
        --prot-window-before 5 --prot-window-after 5 \
-       --ped my_ped.ped --comparison lineages \
-       --max-missing 0.2
+       --ped examples/data/Pf7-Gambia.ped --comparison lineages \
+       --max-missing 0.2 \
+       --verbose
    ```

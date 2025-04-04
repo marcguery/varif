@@ -24,7 +24,7 @@ class Variant(object):
         group1 (list) : Names of samples in first group of the comparison
         group2 (list) : Names of samples in second group of the comparison
         counts (dict) : Key (sample name), value (AD of each sample for each allele including ref)
-        asps (dict) : Key (sample name), value (asp of each sample for each allele including ref)
+        vafs (dict) : Key (sample name), value (vaf of each sample for each allele including ref)
         props (list) : Alt/Ref proportions of groups 1 and 2 for each alt
         miss (list) : Mssing call proportions for groups 1 and 2 for each alt
         heteroz (list) : Heterozygous call proportions for groups 1 and 2 for each alt
@@ -63,7 +63,7 @@ class Variant(object):
                                         len(self.counts[sample]),
                                         vcfLine[i+9].split(":")[adRank].strip("\n")))
                     self.counts[sample] = [0]*(len(self.alts) + 1)
-        self.asps = {}
+        self.vafs = {}
         self.props = []
         self.miss = []
         self.heteroz = []
@@ -71,65 +71,67 @@ class Variant(object):
         self.categories = []   
         self.log = ["",[]]
     
-    def calculate_asps(self):
+    def calculate_vafs(self):
         """
-        Get the Allele Sample Proportion (ASP) for each sample at each allele including ref
+        Get the Variant Allele Frequency (VAF) for each sample at each allele including ref
 
-        return (dict) : ASPs for each sample
+        return (dict) : VAFs for each sample
 
         """
         try:
             mindepth = int(self.config.options["mindepth"])
         except ValueError:
-            raise ValueError("Argument 'mindepth' should be an integer, not '%s'"%mindepth)
+            Config.error_print("Argument 'mindepth' should be an integer, not '%s'"%mindepth)
+            raise ValueError()
         if mindepth < 1:
-            raise ValueError("Depth should be above 0")
+            Config.error_print("Depth should be above 0")            
+            raise ValueError()
         #Handling division by zero, when there is no ref
         for sample in self.counts:
             if sum(self.counts[sample]) < mindepth:
-                self.asps[sample] = [math.nan]*len(self.counts[sample])
+                self.vafs[sample] = [math.nan]*len(self.counts[sample])
             else:
-                self.asps[sample] = [round(ad/sum(self.counts[sample]), 6) for ad in self.counts[sample]]
-        return self.asps
+                self.vafs[sample] = [round(ad/sum(self.counts[sample]), 6) for ad in self.counts[sample]]
+        return self.vafs
     
-    def asp_stats(self, asps):
+    def vaf_stats(self, vafs):
         """
         Calculate allele population frequencies and other similar stats about samples
 
         Args:
-        asps (list) : Alternate allele sample proportions for each sample
+        vafs (list) : Variant allele frequencies
 
         return (list) : Numbers and proportions of samples
         """
         
         
-        #Alternate ASP above which a loci is Alt homozygous
-        minaltasp = self.config.options["minaltasp"]
-        #Alternate ASP below which a loci is non Alt homozygous (assumed to be Ref homozygous)
-        maxrefasp = self.config.options["maxrefasp"]
+        #VAF above which a locus is homozygous
+        minvafhomoz = self.config.options["minVafHomozygous"]
+        #VAF above which a locus contains the allele
+        minvafpresent = self.config.options["minVafPresent"]
             
-        lensupp = len([supptominaltasp for supptominaltasp in asps if supptominaltasp >= minaltasp])
-        leninfe = len([infetomaxrefasp for infetomaxrefasp in asps if infetomaxrefasp <= maxrefasp])
-        avail = lensupp+leninfe if lensupp+leninfe > 0 else math.nan
+        lenhomoz = len([vaf for vaf in vafs if vaf >= minvafhomoz])
+        lenabsent = len([vaf for vaf in vafs if vaf < minvafpresent])
+        avail = lenhomoz+lenabsent if lenhomoz+lenabsent > 0 else math.nan
             
-        missing = len([asp for asp in asps if np.isnan(asp)])
-        heteroz = len(asps) - missing - avail
+        missing = len([vaf for vaf in vafs if np.isnan(vaf)])
+        heteroz = len(vafs) - missing - avail
                        
-        propsupp = lensupp/(avail + heteroz)
-        propinfe = leninfe/(avail + heteroz)
-        propmissing = missing/len(asps)
+        prophomoz = lenhomoz/(avail + heteroz)
+        propabsent = lenabsent/(avail + heteroz)
+        propmissing = missing/len(vafs)
         propheteroz = heteroz/(avail + heteroz)
             
-        maf = min(propsupp, propinfe)
+        maf = min(prophomoz, propabsent)
         
-        return [lensupp, leninfe, propsupp, propinfe, propmissing, propheteroz, maf]
+        return [lenhomoz, lenabsent, prophomoz, propabsent, propmissing, propheteroz, maf]
 
-    def apf_from_asps(self):
+    def apf_from_vafs(self):
         """
         Get the mutated and reference Allele Population Frequencies using Allele Sample Proportions
 
         """
-        assert self.asps != {}
+        assert self.vafs != {}
         #Minimal and maximal population MAFs
         minmaf1group = self.config.options["minMaf1"]
         maxmaf1group = self.config.options["maxMaf1"]
@@ -137,16 +139,16 @@ class Variant(object):
         maxmaf2groups = self.config.options["maxMaf2"]
         #Minimal difference of allele population frequency between groups
         minapfdiff = self.config.options["minApfDiff"]
-        #Maximal proportion of missing or mixed asp in both groups
+        #Maximal proportion of missing or mixed vaf in both groups
         maxmissing = self.config.options["maxMissing"]
         maxheteroz = self.config.options["maxHeteroz"]
         assert minmaf2groups <= minmaf1group <= maxmaf1group <= maxmaf2groups
         
         for rank in range(1,len(self.alts)+1):
-            aspGroup1Rank = [self.asps[sample][rank] for sample in self.group1]
-            aspGroup2Rank = [self.asps[sample][rank] for sample in self.group2]
-            leng1supp, leng1infe, propg1supp, propg1infe, propg1missing, propg1heteroz, g1maf = self.asp_stats(aspGroup1Rank)
-            leng2supp, leng2infe, propg2supp, propg2infe, propg2missing, propg2heteroz, g2maf = self.asp_stats(aspGroup2Rank)
+            vafGroup1Rank = [self.vafs[sample][rank] for sample in self.group1]
+            vafGroup2Rank = [self.vafs[sample][rank] for sample in self.group2]
+            leng1supp, leng1infe, propg1supp, propg1infe, propg1missing, propg1heteroz, g1maf = self.vaf_stats(vafGroup1Rank)
+            leng2supp, leng2infe, propg2supp, propg2infe, propg2missing, propg2heteroz, g2maf = self.vaf_stats(vafGroup2Rank)
             
             self.heteroz.append([propg1heteroz, propg2heteroz])
             self.props.append([propg1supp, propg1infe, propg2supp, propg2infe])
